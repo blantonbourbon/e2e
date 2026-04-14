@@ -51,3 +51,11 @@ This is a support surface for proving the generated framework works end to end.
 - Distinguish OIDC-bootstrap failures from later scenario assertion failures.
 - Distinguish demo-server-unavailable failures from scenario-assertion failures.
 - Preserve test and reporting artifacts on failing runs when possible so user-testing synthesis can classify the failure source.
+
+## Flow Validator Guidance: CLI / Gradle surface
+
+- For the `bootstrap-reporting` milestone, run all assigned Gradle assertions in a single validator because the commands share repo-root Gradle state and `build/` outputs.
+- Use the repo root `/home/kratos/projects/e2e` and the checked-in `./gradlew` wrapper only.
+- Do not start demo-app or browser-backed services unless an assigned assertion explicitly requires them.
+- Keep all evidence within the assigned milestone evidence directory and write the flow report only to the requested JSON path.
+- Do not delete or mutate mission files outside the assigned flow report, evidence directory, or generated Gradle outputs created by the validation commands.
