@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="CoreSmokeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-04-14T14:52:49" hostname="pc" time="0.045">
-  <properties/>
-  <testcase name="coreModuleIsConfigured()" classname="CoreSmokeTest" time="0.045"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
