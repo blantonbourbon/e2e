@@ -1,0 +1,15 @@
+{
+  "featureId": "bootstrap-real-allure-integration-fix",
+  "reviewedAt": "2026-04-14T16:59:53.183308+00:00",
+  "commitId": "757ff2b1cfd47a0b93e613045df469f4e4c82c54",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix resolves the prior blocking review findings. The root build now uses the Allure Gradle report plugin and consumes `:test-suite` results instead of generating placeholder HTML, `:test-suite:test` is wired through the Allure adapter/JUnit 5 integration to emit real `*-result.json`/`*-container.json`/attachment artifacts, and the smoke test now touches a public `:core` API so the dependency proof would break if `test-suite` stopped depending on `core`.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": "/home/kratos/projects/e2e/.factory/validation/bootstrap-reporting/scrutiny/reviews/bootstrap-allure-entrypoints.json",
+  "summary": "Pass. The repository now uses real Allure plugin-backed reporting and genuine Allure result artifacts, the pre-test `allureReport` path still gives a clear prerequisite message, and the updated smoke test adequately fixes the earlier missing dependency proof without introducing new review issues."
+}
