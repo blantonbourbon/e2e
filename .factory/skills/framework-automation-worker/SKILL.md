@@ -33,13 +33,16 @@ None.
    - app-specific runners and step definitions belong in `test-suite`,
    - feature files belong under `test-suite/src/test/resources/features/<app>/...`.
 5. Use `E2E_BASE_URL` or `-De2e.baseUrl=...` as the shared base-URL contract for demo-page execution; do not hardcode the demo endpoint only inside app steps.
-6. For sample-scenario work, verify the demo page through the supported local service on port `3110`.
-7. This worker owns first-run Playwright browser provisioning or cache-detection behavior when a feature fulfills browser-backed execution assertions.
-8. When implementing reporting or hooks, leave observable artifacts or logs that prove the shared framework path executed.
-9. Run focused module checks first, then the repo validators from `.factory/services.yaml`, plus any contract-specific commands needed by the assertions your feature fulfills.
-10. If your feature fulfills cross-area diagnostic assertions, exercise both a demo-unavailable failure and an intentional assertion failure and preserve evidence for both.
-11. If you execute the sample suite, confirm no orphaned browser or demo-server processes remain after the run.
-12. In the handoff, include the exact failing test you started with, the exact passing rerun, and any artifact paths that prove the scenario/report flow worked.
+6. When OIDC work is in scope, use shared auth configuration such as `E2E_AUTH_MODE` / `-De2e.auth.mode=...` and `E2E_OIDC_HANDLER` / `-De2e.oidc.handler=...`; do not implement auth bootstrap only inside app-local steps.
+7. Keep OIDC support framework-only for this mission: implement pluggable handler contracts that can represent saved-session and API/token-bootstrap strategies, but validate them with repo-local fakes/stubs rather than a live IdP.
+8. For sample-scenario work, verify the demo page through the supported local service on port `3110`.
+9. This worker owns first-run Playwright browser provisioning or cache-detection behavior when a feature fulfills browser-backed execution assertions.
+10. When implementing reporting, hooks, or auth bootstrap, leave observable artifacts or logs that prove the shared framework path and active auth mode executed.
+11. Run focused module checks first, then the repo validators from `.factory/services.yaml`, plus any contract-specific commands needed by the assertions your feature fulfills.
+12. If your feature fulfills cross-area diagnostic assertions, exercise both a demo-unavailable failure and an intentional assertion failure and preserve evidence for both.
+13. If your feature fulfills OIDC assertions, exercise both baseline mode and OIDC-enabled mode, plus at least one induced OIDC bootstrap failure with preserved diagnostics.
+14. If you execute the sample suite, confirm no orphaned browser or demo-server processes remain after the run.
+15. In the handoff, include the exact failing test you started with, the exact passing rerun, and any artifact paths that prove the scenario/report flow worked.
 
 ## Example Handoff
 

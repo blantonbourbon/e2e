@@ -19,9 +19,16 @@ Required env vars, external dependency assumptions, local tooling expectations, 
 
 ## Runtime Configuration
 
-The framework should expose a shared base-URL configuration input for the sample suite through `E2E_BASE_URL` or `-De2e.baseUrl=...`. Workers should keep configuration centralized so app-specific steps do not hardcode the demo endpoint as their only source of truth.
+The framework should expose:
+
+- a shared base-URL configuration input for the sample suite through `E2E_BASE_URL` or `-De2e.baseUrl=...`
+- an auth-mode selector through `E2E_AUTH_MODE` or `-De2e.auth.mode=...`
+- an OIDC handler selector through `E2E_OIDC_HANDLER` or `-De2e.oidc.handler=...`
+
+Workers should keep configuration centralized so app-specific steps do not hardcode the demo endpoint or auth flow as their only source of truth.
 
 ## Notes
 
-- No third-party credentials are required for the initial scaffold.
+- No third-party credentials or live IdP accounts are required for this mission.
+- OIDC validation must remain framework-only and rely on repo-local fake/stub behavior.
 - Service ports and commands belong in `.factory/services.yaml`, not here.

@@ -15,6 +15,7 @@ Primary validation surface for this mission.
 - Use Gradle wrapper commands from repo root to validate bootstrap, module wiring, test execution, and reporting.
 - Validate app/module structure with filesystem inspection where the contract calls for it.
 - Use the local demo app service on port `3110` when executing sample scenarios.
+- When OIDC assertions are in scope, run both baseline mode and OIDC-enabled mode explicitly.
 
 ### Local demo page surface
 
@@ -45,5 +46,8 @@ This is a support surface for proving the generated framework works end to end.
 ## Validation Notes
 
 - First-run validation must account for Playwright browser provisioning or cache detection.
+- OIDC validation must remain repo-local and must not require a live identity provider.
+- Distinguish baseline-mode runs from OIDC-enabled runs in logs or artifacts.
+- Distinguish OIDC-bootstrap failures from later scenario assertion failures.
 - Distinguish demo-server-unavailable failures from scenario-assertion failures.
 - Preserve test and reporting artifacts on failing runs when possible so user-testing synthesis can classify the failure source.
