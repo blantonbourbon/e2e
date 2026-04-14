@@ -2,7 +2,13 @@ plugins {
     id "java-library"
 }
 
+def allureJavaVersion = "2.29.1"
+def playwrightVersion = "1.52.0"
+
 dependencies {
+    api("com.microsoft.playwright:playwright:${playwrightVersion}")
+    implementation(platform("io.qameta.allure:allure-bom:${allureJavaVersion}"))
+    implementation("io.qameta.allure:allure-java-commons")
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
