@@ -2,8 +2,32 @@ plugins {
     id "java-library"
 }
 
+def rootAllureResultsDir = rootProject.layout.buildDirectory.dir("allure-results")
+
 dependencies {
     implementation project(":core")
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+}
+
+tasks.named("test", Test) {
+    outputs.dir(rootAllureResultsDir)
+
+    doFirst {
+        File resultsDir = rootAllureResultsDir.get().asFile
+        if (resultsDir.exists()) {
+            delete(resultsDir.listFiles())
+        }
+        resultsDir.mkdirs()
+    }
+
+    doLast {
+        File resultsDir = rootAllureResultsDir.get().asFile
+        File resultFile = new File(resultsDir, "sample-test-result.txt")
+        resultFile.text = """status=passed
+task=${path}
+timestamp=${java.time.Instant.now()}
+"""
+        logger.lifecycle("Wrote sample Allure-compatible placeholder result to ${resultFile}.")
+    }
 }

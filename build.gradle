@@ -2,6 +2,9 @@ plugins {
     id "base"
 }
 
+def allureResultsDir = layout.buildDirectory.dir("allure-results")
+def allureReportDir = layout.buildDirectory.dir("reports/allure-report")
+
 allprojects {
     group = "com.example.e2e"
     version = "0.1.0-SNAPSHOT"
@@ -22,5 +25,56 @@ subprojects {
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
+    }
+}
+
+tasks.register("sampleTest") {
+    group = "verification"
+    description = "Runs the sample test-suite from the repository root."
+    dependsOn(":test-suite:test")
+}
+
+tasks.register("allureReport") {
+    group = "reporting"
+    description = "Generates a placeholder Allure report output from the current allure-results directory."
+
+    inputs.files(fileTree(allureResultsDir).builtBy())
+    outputs.dir(allureReportDir)
+
+    doLast {
+        File resultsDir = allureResultsDir.get().asFile
+        File reportDir = allureReportDir.get().asFile
+        File summaryFile = new File(reportDir, "index.html")
+
+        reportDir.mkdirs()
+
+        if (!resultsDir.exists() || !resultsDir.isDirectory() || !resultsDir.listFiles()) {
+            summaryFile.text = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Allure Report Placeholder</title></head>
+<body>
+  <h1>Allure report prerequisites not met</h1>
+  <p>No Allure results were found in ${resultsDir}.</p>
+  <p>Run <code>./gradlew sampleTest --no-daemon</code> or <code>./gradlew :test-suite:test --no-daemon</code> first, then rerun <code>./gradlew allureReport --no-daemon</code>.</p>
+</body>
+</html>
+"""
+            logger.lifecycle("No Allure results found in ${resultsDir}. Run './gradlew sampleTest --no-daemon' or './gradlew :test-suite:test --no-daemon' before generating the report.")
+            logger.lifecycle("Created placeholder report guidance at ${summaryFile}.")
+            return
+        }
+
+        int resultCount = resultsDir.listFiles().findAll { it.isFile() }.size()
+        summaryFile.text = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Allure Report Placeholder</title></head>
+<body>
+  <h1>Allure report placeholder</h1>
+  <p>Detected ${resultCount} result file(s) in ${resultsDir}.</p>
+  <p>This bootstrap task confirms the report entrypoint is wired and results are discoverable.</p>
+</body>
+</html>
+"""
+        logger.lifecycle("Generated placeholder Allure report output at ${summaryFile} from ${resultCount} result file(s).")
     }
 }
