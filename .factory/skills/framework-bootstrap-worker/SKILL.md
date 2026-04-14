@@ -34,9 +34,11 @@ None.
 5. If the feature touches the demo server path, make the service runnable through `.factory/services.yaml` conventions and verify reachability on port `3110`.
 6. For contract assertions not covered by `.factory/services.yaml`, run the needed contract-specific commands explicitly and record them.
 7. If your feature touches reporting, explicitly exercise the pre-test `./gradlew allureReport --no-daemon` path and record whether it gives an empty-valid result or a clear prerequisite message.
-8. After edits, run the narrowest relevant commands first, then the repo-level validators from `.factory/services.yaml`.
-9. Before handing off, verify there are no orphaned processes from any demo server or report-serving command you started.
-10. Record exact commands, exit codes, and observations. If a command is expected to fail as part of red-green, note that explicitly.
+8. When a feature is responsible for Allure behavior, use actual Allure Gradle/plugin integration and genuine Allure result artifacts; do not satisfy the contract with handwritten placeholder HTML or synthetic text files.
+9. If a smoke test or sample check is cited as evidence for module wiring, make it touch the dependency it claims to verify so the check would fail if the boundary regressed.
+10. After edits, run the narrowest relevant commands first, then the repo-level validators from `.factory/services.yaml`.
+11. Before handing off, verify there are no orphaned processes from any demo server or report-serving command you started.
+12. Record exact commands, exit codes, and observations. If a command is expected to fail as part of red-green, note that explicitly.
 
 ## Example Handoff
 

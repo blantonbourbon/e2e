@@ -1,0 +1,65 @@
+{
+  "milestone": "bootstrap-reporting",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "./gradlew test --no-daemon --max-workers=3",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "./gradlew testClasses --no-daemon --max-workers=4",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "./gradlew check --no-daemon --max-workers=3",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "failedFeatures": [
+      "bootstrap-gradle-wrapper-scaffold",
+      "bootstrap-allure-entrypoints"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "bootstrap-gradle-wrapper-scaffold",
+      "severity": "blocking",
+      "description": "`test-suite/src/test/java/TestSuiteSmokeTest.java` only asserts true and does not verify the `test-suite` dependency on `:core`, so the scaffold does not actually prove the module boundary claimed in the feature handoff."
+    },
+    {
+      "featureId": "bootstrap-allure-entrypoints",
+      "severity": "blocking",
+      "description": "`build.gradle` wires a handwritten placeholder `allureReport` task instead of real Allure Gradle integration, so report generation does not produce an actual Allure report."
+    },
+    {
+      "featureId": "bootstrap-allure-entrypoints",
+      "severity": "blocking",
+      "description": "`test-suite/build.gradle` writes a synthetic `sample-test-result.txt` file into `build/allure-results`, which is not Allure result data and makes the reporting path contract-mismatched."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Clarify that generated Gradle `build/` outputs should not be committed unless a task explicitly requires checked-in generated artifacts.",
+      "evidence": "Review of `bootstrap-gradle-wrapper-scaffold` found committed `core/build/**` and `test-suite/build/**` artifacts in commit `7c66b402a9c49eed1579ef3ec59909c30aa64b9b`.",
+      "isSystemic": false
+    },
+    {
+      "target": "framework-bootstrap-worker skill",
+      "suggestion": "Strengthen reporting instructions to require actual Allure Gradle/plugin integration and prohibit placeholder report/result generation when a feature fulfills Allure reporting assertions.",
+      "evidence": "Review of `bootstrap-allure-entrypoints` found a handwritten placeholder `allureReport` task and fake `sample-test-result.txt` artifacts instead of real Allure-compatible reporting in commit `e4005c12a47af1d00a0e393a992efa7846307835`.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": null
+}

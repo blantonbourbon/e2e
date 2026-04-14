@@ -1,0 +1,34 @@
+{
+  "featureId": "bootstrap-allure-entrypoints",
+  "reviewedAt": "2026-04-14T16:19:14+00:00",
+  "commitId": "e4005c12a47af1d00a0e393a992efa7846307835",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The rerun does not resolve the original review failure. The feature does expose root `sampleTest`/`allureReport` entrypoints and gives a clear pre-test message, but it still does not wire real Allure reporting: the report task writes placeholder HTML and the test task fabricates a plain-text result file instead of emitting Allure-compatible results.",
+    "issues": [
+      {
+        "file": "build.gradle",
+        "line": 37,
+        "severity": "blocking",
+        "description": "The root `allureReport` task is still a handwritten placeholder implementation. It writes `build/reports/allure-report/index.html` itself and only logs a file count (`build.gradle:37-78`) instead of invoking any actual Allure Gradle/plugin integration. Because the repository has no real Allure task wiring, the feature's requirement to \"configure Allure reporting tasks\" remains unmet."
+      },
+      {
+        "file": "test-suite/build.gradle",
+        "line": 24,
+        "severity": "blocking",
+        "description": "`test-suite:test` still manufactures `build/allure-results/sample-test-result.txt` with ad-hoc `status/task/timestamp` text (`test-suite/build.gradle:24-31`) and labels it \"Allure-compatible\" in logs. That file is not an Allure result artifact, so even after test execution the root reporting entrypoint is consuming fake input rather than real Allure results."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The bootstrap worker skill still leaves too much ambiguity around reporting work. It tells workers to exercise `./gradlew allureReport --no-daemon`, but it never explicitly requires real Allure plugin/task integration or forbids placeholder report/result generation, which is how this contract-mismatched implementation was produced and then treated as successful.",
+      "evidence": "/home/kratos/projects/e2e/.factory/skills/framework-bootstrap-worker/SKILL.md:36 requires exercising the pre-test `allureReport` path; commit `e4005c12a47af1d00a0e393a992efa7846307835` adds placeholder-only logic in `build.gradle:37-78` and `test-suite/build.gradle:14-31` instead of real Allure wiring."
+    }
+  ],
+  "addressesFailureFrom": "/home/kratos/projects/e2e/.factory/validation/bootstrap-reporting/scrutiny/reviews/bootstrap-allure-entrypoints.json",
+  "summary": "Review failed again: the current repository state still substitutes placeholder report/result generation for real Allure integration, so the feature does not satisfy its Allure reporting contract."
+}
