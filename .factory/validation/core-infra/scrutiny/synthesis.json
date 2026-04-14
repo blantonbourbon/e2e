@@ -1,0 +1,52 @@
+{
+  "milestone": "core-infra",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "./gradlew test --no-daemon --max-workers=3",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "./gradlew testClasses --no-daemon --max-workers=4",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "./gradlew check --no-daemon --max-workers=3",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "failedFeatures": [
+      "core-config-and-boundaries",
+      "core-runtime-primitives"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "core-config-and-boundaries",
+      "severity": "blocking",
+      "description": "RuntimeConfiguration.parseBaseUrl accepts malformed hostless HTTP(S) URLs such as `https:/demo.example.test`, so invalid base URL configuration can bypass the intended fail-fast diagnostic and fail later during navigation."
+    },
+    {
+      "featureId": "core-runtime-primitives",
+      "severity": "blocking",
+      "description": "PlaywrightRuntime always creates the BrowserContext before OIDC bootstrap runs, and the saved-session contract only supports local-storage seeding, so shared core OIDC handlers cannot represent session reuse cases that need cookies or storage state at context-creation time."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
+    {
+      "observation": "Add a .factory/library entry documenting the new public runtime/auth/reporting APIs introduced by core-runtime-primitives.",
+      "reason": "Deferred during scrutiny because the code and review artifacts already identify the relevant APIs, and this validation pass did not need an additional shared-state update to triage the milestone."
+    }
+  ],
+  "previousRound": null
+}
