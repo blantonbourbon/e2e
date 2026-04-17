@@ -1,6 +1,5 @@
 package com.example.e2e.core.runtime;
 
-import com.example.e2e.core.auth.AuthBootstrapResult;
 import com.example.e2e.core.config.RuntimeConfiguration;
 import com.example.e2e.core.reporting.ExecutionReporter;
 import com.microsoft.playwright.Browser;
@@ -12,8 +11,6 @@ public interface PlaywrightSession extends AutoCloseable {
     RuntimeConfiguration configuration();
 
     ExecutionReporter reporter();
-
-    AuthBootstrapResult authBootstrapResult();
 
     Playwright playwright();
 

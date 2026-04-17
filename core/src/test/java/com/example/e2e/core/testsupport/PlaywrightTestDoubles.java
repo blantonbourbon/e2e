@@ -26,6 +26,7 @@ public final class PlaywrightTestDoubles {
         List<String> initScripts = new ArrayList<>();
         List<Map<String, String>> extraHttpHeaders = new ArrayList<>();
         List<String> navigations = new ArrayList<>();
+        List<Boolean> configuredContexts = new ArrayList<>();
 
         Page page = proxy(Page.class, (proxy, method, args) -> switch (method.getName()) {
             case "navigate" -> {
@@ -55,7 +56,15 @@ public final class PlaywrightTestDoubles {
         });
 
         Browser browser = proxy(Browser.class, (proxy, method, args) -> switch (method.getName()) {
-            case "newContext" -> context;
+            case "newContext" -> {
+                if (args == null || args.length == 0) {
+                    events.add("new-context:baseline");
+                } else {
+                    configuredContexts.add(true);
+                    events.add("new-context:configured");
+                }
+                yield context;
+            }
             case "close" -> {
                 events.add("close:browser");
                 yield null;
@@ -80,7 +89,7 @@ public final class PlaywrightTestDoubles {
             default -> defaultValue(proxy, method, args);
         });
 
-        return new RecordingGraph(playwright, context, initScripts, extraHttpHeaders, navigations);
+        return new RecordingGraph(playwright, context, initScripts, extraHttpHeaders, navigations, configuredContexts);
     }
 
     public record RecordingGraph(
@@ -88,7 +97,8 @@ public final class PlaywrightTestDoubles {
         BrowserContext context,
         List<String> initScripts,
         List<Map<String, String>> extraHttpHeaders,
-        List<String> navigations
+        List<String> navigations,
+        List<Boolean> configuredContexts
     ) {
     }
 

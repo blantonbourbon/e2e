@@ -1,0 +1,4 @@
+{"file": ".factory/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".factory/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify test and abstraction simplification quality"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify configuration and runtime failure behavior"}

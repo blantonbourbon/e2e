@@ -3,6 +3,7 @@ package com.example.e2e.core.config;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,7 +21,7 @@ class RuntimeConfigurationTest {
         );
 
         assertEquals(URI.create("https://demo.example.test"), configuration.baseUrl());
-        assertEquals(AuthMode.BASELINE, configuration.authMode());
+        assertTrue(configuration.storageStatePath().isEmpty());
     }
 
     @Test
@@ -60,79 +61,50 @@ class RuntimeConfigurationTest {
     }
 
     @Test
-    void loadsOidcModeWhenHandlerIsConfigured() {
+    void loadsStorageStatePathFromConfigurationWhenProvided() {
         RuntimeConfiguration configuration = RuntimeConfiguration.load(
             ConfigurationSource.of(
                 Map.of(
                     "e2e.baseUrl", "http://localhost:3110",
-                    "e2e.auth.mode", "oidc",
-                    "e2e.oidc.handler", "saved-session"
+                    "e2e.auth.storageStatePath", "playwright/.auth/user.json"
                 ),
                 Map.of()
             )
         );
 
-        assertEquals(AuthMode.OIDC, configuration.authMode());
-        assertEquals(OidcHandlerType.SAVED_SESSION, configuration.oidc().orElseThrow().handler());
+        assertEquals(Path.of("playwright/.auth/user.json"), configuration.storageStatePath().orElseThrow());
     }
 
     @Test
-    void failsFastWhenOidcModeIsMissingHandler() {
-        ConfigurationException exception = assertThrows(
-            ConfigurationException.class,
-            () -> RuntimeConfiguration.load(
-                ConfigurationSource.of(
-                    Map.of(
-                        "e2e.baseUrl", "http://localhost:3110",
-                        "e2e.auth.mode", "oidc"
-                    ),
-                    Map.of()
+    void systemPropertyOverridesEnvironmentStorageStatePath() {
+        RuntimeConfiguration configuration = RuntimeConfiguration.load(
+            ConfigurationSource.of(
+                Map.of(
+                    "e2e.baseUrl", "http://localhost:3110",
+                    "e2e.auth.storageStatePath", "playwright/.auth/local.json"
+                ),
+                Map.of(
+                    "E2E_AUTH_STORAGE_STATE_PATH", "playwright/.auth/env.json"
                 )
             )
         );
 
-        assertTrue(exception.getMessage().contains("E2E_OIDC_HANDLER"));
-        assertTrue(exception.getMessage().contains("e2e.oidc.handler"));
+        assertEquals(Path.of("playwright/.auth/local.json"), configuration.storageStatePath().orElseThrow());
     }
 
     @Test
-    void failsFastWhenAuthModeIsInvalid() {
+    void failsFastWhenStorageStatePathIsBlank() {
         ConfigurationException exception = assertThrows(
             ConfigurationException.class,
             () -> RuntimeConfiguration.load(
                 ConfigurationSource.of(
-                    Map.of(
-                        "e2e.baseUrl", "http://localhost:3110",
-                        "e2e.auth.mode", "mystery"
-                    ),
-                    Map.of()
+                    Map.of("e2e.baseUrl", "http://localhost:3110"),
+                    Map.of("E2E_AUTH_STORAGE_STATE_PATH", "   ")
                 )
             )
         );
 
-        assertTrue(exception.getMessage().contains("E2E_AUTH_MODE"));
-        assertTrue(exception.getMessage().contains("baseline"));
-        assertTrue(exception.getMessage().contains("oidc"));
-    }
-
-    @Test
-    void failsFastWhenOidcHandlerIsInvalid() {
-        ConfigurationException exception = assertThrows(
-            ConfigurationException.class,
-            () -> RuntimeConfiguration.load(
-                ConfigurationSource.of(
-                    Map.of(
-                        "e2e.baseUrl", "http://localhost:3110",
-                        "e2e.auth.mode", "oidc",
-                        "e2e.oidc.handler", "browser-magic"
-                    ),
-                    Map.of()
-                )
-            )
-        );
-
-        assertTrue(exception.getMessage().contains("E2E_OIDC_HANDLER"));
-        assertTrue(exception.getMessage().contains("saved-session"));
-        assertTrue(exception.getMessage().contains("api-token"));
+        assertTrue(exception.getMessage().contains("E2E_AUTH_STORAGE_STATE_PATH"));
+        assertTrue(exception.getMessage().contains("e2e.auth.storageStatePath"));
     }
 }

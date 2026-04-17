@@ -1,7 +1,5 @@
 package com.example.e2e.core.runtime;
 
-import com.example.e2e.core.auth.AuthBootstrapResult;
-import com.example.e2e.core.auth.AuthBootstrapper;
 import com.example.e2e.core.config.RuntimeConfiguration;
 import com.example.e2e.core.reporting.AllureExecutionReporter;
 import com.example.e2e.core.reporting.ExecutionReporter;
@@ -18,15 +16,13 @@ public final class PlaywrightRuntime {
     private final PlaywrightRuntimeOptions options;
     private final RuntimeHooks hooks;
     private final ExecutionReporter reporter;
-    private final AuthBootstrapper authBootstrapper;
 
     public PlaywrightRuntime() {
         this(
             Playwright::create,
             PlaywrightRuntimeOptions.defaults(),
             RuntimeHooks.none(),
-            new AllureExecutionReporter(),
-            AuthBootstrapper.defaultBootstrapper()
+            new AllureExecutionReporter()
         );
     }
 
@@ -34,14 +30,12 @@ public final class PlaywrightRuntime {
         PlaywrightFactory playwrightFactory,
         PlaywrightRuntimeOptions options,
         RuntimeHooks hooks,
-        ExecutionReporter reporter,
-        AuthBootstrapper authBootstrapper
+        ExecutionReporter reporter
     ) {
         this.playwrightFactory = Objects.requireNonNull(playwrightFactory, "playwrightFactory");
         this.options = Objects.requireNonNull(options, "options");
         this.hooks = Objects.requireNonNull(hooks, "hooks");
         this.reporter = Objects.requireNonNull(reporter, "reporter");
-        this.authBootstrapper = Objects.requireNonNull(authBootstrapper, "authBootstrapper");
     }
 
     public PlaywrightSession start() {
@@ -52,7 +46,7 @@ public final class PlaywrightRuntime {
         Objects.requireNonNull(configuration, "configuration");
 
         hooks.beforeSession(configuration, reporter);
-        reporter.info("Starting Playwright runtime in " + configuration.authMode().name().toLowerCase() + " mode.");
+        reporter.info("Starting Playwright runtime.");
 
         Playwright playwright = null;
         Browser browser = null;
@@ -60,15 +54,13 @@ public final class PlaywrightRuntime {
         try {
             playwright = playwrightFactory.create();
             browser = launchBrowser(playwright);
-            context = browser.newContext();
-            AuthBootstrapResult authBootstrapResult = authBootstrapper.bootstrap(configuration, context, reporter);
+            context = createContext(browser, configuration);
             Page page = context.newPage();
 
             ManagedPlaywrightSession session = new ManagedPlaywrightSession(
                 configuration,
                 reporter,
                 hooks,
-                authBootstrapResult,
                 playwright,
                 browser,
                 context,
@@ -99,6 +91,17 @@ public final class PlaywrightRuntime {
         };
     }
 
+    private BrowserContext createContext(Browser browser, RuntimeConfiguration configuration) {
+        if (configuration.storageStatePath().isEmpty()) {
+            return browser.newContext();
+        }
+
+        java.nio.file.Path storageStatePath = configuration.storageStatePath().orElseThrow();
+        reporter.info("Using storage state from " + storageStatePath + ".");
+        return browser.newContext(new Browser.NewContextOptions()
+            .setStorageStatePath(storageStatePath));
+    }
+
     private static void closeQuietly(BrowserContext context) {
         if (context != null) {
             context.close();
@@ -121,7 +124,6 @@ public final class PlaywrightRuntime {
         private final RuntimeConfiguration configuration;
         private final ExecutionReporter reporter;
         private final RuntimeHooks hooks;
-        private final AuthBootstrapResult authBootstrapResult;
         private final Playwright playwright;
         private final Browser browser;
         private final BrowserContext context;
@@ -132,7 +134,6 @@ public final class PlaywrightRuntime {
             RuntimeConfiguration configuration,
             ExecutionReporter reporter,
             RuntimeHooks hooks,
-            AuthBootstrapResult authBootstrapResult,
             Playwright playwright,
             Browser browser,
             BrowserContext context,
@@ -141,7 +142,6 @@ public final class PlaywrightRuntime {
             this.configuration = configuration;
             this.reporter = reporter;
             this.hooks = hooks;
-            this.authBootstrapResult = authBootstrapResult;
             this.playwright = playwright;
             this.browser = browser;
             this.context = context;
@@ -156,11 +156,6 @@ public final class PlaywrightRuntime {
         @Override
         public ExecutionReporter reporter() {
             return reporter;
-        }
-
-        @Override
-        public AuthBootstrapResult authBootstrapResult() {
-            return authBootstrapResult;
         }
 
         @Override

@@ -2,21 +2,20 @@ package com.example.e2e.core.config;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
 
-public record RuntimeConfiguration(URI baseUrl, AuthMode authMode, Optional<OidcConfiguration> oidc) {
+public record RuntimeConfiguration(URI baseUrl, Optional<Path> storageStatePath) {
     private static final String BASE_URL_PROPERTY = "e2e.baseUrl";
     private static final String BASE_URL_ENVIRONMENT = "E2E_BASE_URL";
-    private static final String AUTH_MODE_PROPERTY = "e2e.auth.mode";
-    private static final String AUTH_MODE_ENVIRONMENT = "E2E_AUTH_MODE";
-    private static final String OIDC_HANDLER_PROPERTY = "e2e.oidc.handler";
-    private static final String OIDC_HANDLER_ENVIRONMENT = "E2E_OIDC_HANDLER";
+    private static final String STORAGE_STATE_PATH_PROPERTY = "e2e.auth.storageStatePath";
+    private static final String STORAGE_STATE_PATH_ENVIRONMENT = "E2E_AUTH_STORAGE_STATE_PATH";
 
     public RuntimeConfiguration {
         Objects.requireNonNull(baseUrl, "baseUrl");
-        Objects.requireNonNull(authMode, "authMode");
-        oidc = Objects.requireNonNull(oidc, "oidc");
+        storageStatePath = Objects.requireNonNull(storageStatePath, "storageStatePath");
     }
 
     public static RuntimeConfiguration load() {
@@ -27,15 +26,11 @@ public record RuntimeConfiguration(URI baseUrl, AuthMode authMode, Optional<Oidc
         ConfigurationSource.ResolvedValue baseUrlValue = source.resolve(BASE_URL_PROPERTY, BASE_URL_ENVIRONMENT);
         URI baseUrl = parseBaseUrl(baseUrlValue);
 
-        ConfigurationSource.ResolvedValue authModeValue = source.resolve(AUTH_MODE_PROPERTY, AUTH_MODE_ENVIRONMENT);
-        AuthMode authMode = authModeValue == null ? AuthMode.BASELINE : AuthMode.parse(authModeValue);
+        Optional<Path> storageStatePath = parseStorageStatePath(
+            source.resolve(STORAGE_STATE_PATH_PROPERTY, STORAGE_STATE_PATH_ENVIRONMENT)
+        );
 
-        Optional<OidcConfiguration> oidcConfiguration = switch (authMode) {
-            case BASELINE -> Optional.empty();
-            case OIDC -> Optional.of(new OidcConfiguration(parseOidcHandler(source.resolve(OIDC_HANDLER_PROPERTY, OIDC_HANDLER_ENVIRONMENT))));
-        };
-
-        return new RuntimeConfiguration(baseUrl, authMode, oidcConfiguration);
+        return new RuntimeConfiguration(baseUrl, storageStatePath);
     }
 
     private static URI parseBaseUrl(ConfigurationSource.ResolvedValue baseUrlValue) {
@@ -74,20 +69,39 @@ public record RuntimeConfiguration(URI baseUrl, AuthMode authMode, Optional<Oidc
         }
     }
 
-    private static OidcHandlerType parseOidcHandler(ConfigurationSource.ResolvedValue handlerValue) {
-        if (handlerValue == null || normalized(handlerValue.value()).isEmpty()) {
+    private static Optional<Path> parseStorageStatePath(ConfigurationSource.ResolvedValue storageStatePathValue) {
+        if (storageStatePathValue == null) {
+            return Optional.empty();
+        }
+
+        String rawValue = normalized(storageStatePathValue.value());
+        if (rawValue.isEmpty()) {
             throw new ConfigurationException(
-                "OIDC mode requires an OIDC handler. Set "
-                    + OIDC_HANDLER_PROPERTY
+                "Invalid storage state path from "
+                    + storageStatePathValue.key()
+                    + ": value is blank. Set "
+                    + STORAGE_STATE_PATH_PROPERTY
                     + " or "
-                    + OIDC_HANDLER_ENVIRONMENT
-                    + " to one of: "
-                    + supportedOidcHandlers()
-                    + "."
+                    + STORAGE_STATE_PATH_ENVIRONMENT
+                    + " to the Playwright storage state file path."
             );
         }
 
-        return OidcHandlerType.parse(handlerValue);
+        try {
+            return Optional.of(Path.of(rawValue));
+        } catch (InvalidPathException exception) {
+            throw new ConfigurationException(
+                "Invalid storage state path from "
+                    + storageStatePathValue.key()
+                    + ": '"
+                    + storageStatePathValue.value()
+                    + "'. Use "
+                    + STORAGE_STATE_PATH_PROPERTY
+                    + " or "
+                    + STORAGE_STATE_PATH_ENVIRONMENT
+                    + " with a valid file path."
+            );
+        }
     }
 
     private static ConfigurationException invalidBaseUrl(ConfigurationSource.ResolvedValue baseUrlValue) {
@@ -106,12 +120,5 @@ public record RuntimeConfiguration(URI baseUrl, AuthMode authMode, Optional<Oidc
 
     private static String normalized(String value) {
         return value == null ? "" : value.trim();
-    }
-
-    private static String supportedOidcHandlers() {
-        return String.join(", ",
-            OidcHandlerType.SAVED_SESSION.externalValue(),
-            OidcHandlerType.API_TOKEN.externalValue()
-        );
     }
 }

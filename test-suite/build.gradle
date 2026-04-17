@@ -4,12 +4,17 @@ plugins {
 }
 
 def allureJavaVersion = "2.29.1"
+def cucumberVersion = "7.34.3"
 
 dependencies {
     implementation project(":core")
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation(platform("io.qameta.allure:allure-bom:${allureJavaVersion}"))
+    testImplementation("io.cucumber:cucumber-java:${cucumberVersion}")
+    testImplementation("io.cucumber:cucumber-junit-platform-engine:${cucumberVersion}")
+    testImplementation("org.junit.platform:junit-platform-suite")
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("io.qameta.allure:allure-cucumber7-jvm")
     testImplementation("io.qameta.allure:allure-junit5")
 }
 
