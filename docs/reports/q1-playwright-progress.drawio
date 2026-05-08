@@ -1,0 +1,85 @@
+<mxfile host="app.diagrams.net" modified="2026-04-03T09:30:00.000Z" agent="OpenAI Codex" version="24.7.17" type="device" compressed="false">
+  <diagram id="q1-playwright-progress" name="Q1 Playwright Progress">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="10" value="Completed Foundation" style="swimlane;rounded=1;whiteSpace=wrap;html=1;startSize=50;fontStyle=1;fontSize=18;fillColor=#d5e8d4;swimlaneFillColor=#edf7ea;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="380" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="Done: Playwright session lifecycle in core" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f9fff7;strokeColor=#82b366;" vertex="1" parent="10">
+          <mxGeometry x="20" y="80" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="Done: Central runtime config in FrameworkConfig" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f9fff7;strokeColor=#82b366;" vertex="1" parent="10">
+          <mxGeometry x="20" y="170" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="Done: Cucumber hooks attach screenshots and traces" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f9fff7;strokeColor=#82b366;" vertex="1" parent="10">
+          <mxGeometry x="20" y="260" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="Done: Area-based Gradle runners and artifact roots" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f9fff7;strokeColor=#82b366;" vertex="1" parent="10">
+          <mxGeometry x="20" y="350" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="20" value="Current Progress" style="swimlane;rounded=1;whiteSpace=wrap;html=1;startSize=50;fontStyle=1;fontSize=18;fillColor=#dae8fc;swimlaneFillColor=#edf4ff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="40" width="380" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Current: common area coverage&lt;div&gt;1 feature / 1 scenario&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f8fbff;strokeColor=#6c8ebf;" vertex="1" parent="20">
+          <mxGeometry x="20" y="120" width="340" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="Current: demoapp area coverage&lt;div&gt;1 feature / 1 scenario&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f8fbff;strokeColor=#6c8ebf;" vertex="1" parent="20">
+          <mxGeometry x="20" y="240" width="340" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="Current: full-suite + app-specific runners&lt;div&gt;3 runner entry points&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f8fbff;strokeColor=#6c8ebf;" vertex="1" parent="20">
+          <mxGeometry x="20" y="380" width="340" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="30" value="Next Plan" style="swimlane;rounded=1;whiteSpace=wrap;html=1;startSize=50;fontStyle=1;fontSize=18;fillColor=#ffe6cc;swimlaneFillColor=#fff3e3;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="920" y="40" width="380" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="31" value="Next: onboard additional app areas" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fffaf2;strokeColor=#d79b00;" vertex="1" parent="30">
+          <mxGeometry x="20" y="80" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="32" value="Next: deepen business flows and assertions" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fffaf2;strokeColor=#d79b00;" vertex="1" parent="30">
+          <mxGeometry x="20" y="180" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="33" value="Later: enable safe parallel execution per area" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fffaf2;strokeColor=#d79b00;" vertex="1" parent="30">
+          <mxGeometry x="20" y="280" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="34" value="Later: refresh the quarterly summary each cycle" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fffaf2;strokeColor=#d79b00;" vertex="1" parent="30">
+          <mxGeometry x="20" y="380" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="100" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="11" target="12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="101" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="12" target="13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="102" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="13" target="14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="103" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="14" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="104" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="14" target="22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="105" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="21" target="23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="106" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="22" target="23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="107" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="23" target="31">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="108" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="31" target="32">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="109" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="32" target="33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="110" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#5f6b7a;" edge="1" parent="1" source="33" target="34">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

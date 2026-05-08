@@ -1,14 +1,10 @@
-plugins {
-    id "base"
-    id "io.qameta.allure-report" version "2.12.0"
-    id "io.qameta.allure-adapter" version "2.12.0" apply false
+ext {
+    allureVersion = '2.32.0'
 }
 
-def testSuiteAllureResultsDir = project(":test-suite").layout.buildDirectory.dir("allure-results")
-
 allprojects {
-    group = "com.example.e2e"
-    version = "0.1.0-SNAPSHOT"
+    group = 'com.example.e2e'
+    version = '1.0.0-SNAPSHOT'
 
     repositories {
         mavenCentral()
@@ -16,57 +12,18 @@ allprojects {
 }
 
 subprojects {
-    apply plugin: "java-library"
+    apply plugin: 'java'
 
     java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
-        }
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
-    }
-}
-
-dependencies {
-    allureReport(files(testSuiteAllureResultsDir))
-}
-
-allure {
-    report {
-        dependsOnTests.set(false)
-        reportDir.set(layout.buildDirectory.dir("reports/allure-report"))
-    }
-}
-
-tasks.register("sampleTest") {
-    group = "verification"
-    description = "Runs the sample test-suite from the repository root."
-    dependsOn(":test-suite:test")
-}
-
-tasks.named("allureReport") {
-    doFirst {
-        delete(layout.buildDirectory.dir("reports/allure-report/allureReport").get().asFile)
-    }
-
-    onlyIf("Allure results must exist before generating the report.") {
-        File resultsDir = testSuiteAllureResultsDir.get().asFile
-        boolean hasAllureArtifacts = resultsDir.exists() && resultsDir.isDirectory() && resultsDir.listFiles()?.any { file ->
-            file.isFile() && (
-                file.name.endsWith("-result.json")
-                    || file.name.endsWith("-container.json")
-                    || file.name == "categories.json"
-                    || file.name == "environment.properties"
-                    || file.name.contains("-attachment")
-            )
+        testLogging {
+            events 'passed', 'skipped', 'failed'
         }
-
-        if (!hasAllureArtifacts) {
-            logger.lifecycle("No Allure results found in ${resultsDir}. Run './gradlew sampleTest --no-daemon' or './gradlew :test-suite:test --no-daemon' before generating the report.")
-        }
-
-        hasAllureArtifacts
+        systemProperty 'file.encoding', 'UTF-8'
     }
 }

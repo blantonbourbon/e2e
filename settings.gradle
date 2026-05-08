@@ -1,3 +1,2 @@
-rootProject.name = "e2e"
-
-include("core", "test-suite")
+rootProject.name = 'e2e-framework'
+include 'core', 'test-suite'

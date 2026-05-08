@@ -1,39 +1,304 @@
 plugins {
-    id "java-library"
-    id "io.qameta.allure-adapter"
+    id 'io.qameta.allure' version '3.0.2'
 }
 
-def allureJavaVersion = "2.29.1"
-def cucumberVersion = "7.34.3"
+def cucumberVersion = '7.22.1'
+def junitPlatformVersion = '1.12.2'
+def junitJupiterVersion = '5.12.2'
+def allureVersion = rootProject.ext.allureVersion
+def isWindows = System.getProperty('os.name', '').toLowerCase().contains('win')
+def fullSuiteRunnerClassName = 'com.example.e2e.tests.runner.RunCucumberTest'
+def playwrightCliVersion = '0.1.12'
+def firmNpmRegistryEnv = 'FIRM_NPM_REGISTRY'
+def npmExecutable = isWindows ? 'npm.cmd' : 'npm'
+def forwardedSystemProperties = [
+        'base.url',
+        'browser',
+        'browser.channel',
+        'browser.executable.path',
+        'headless',
+        'slowmo',
+        'playwright.use.local.browser',
+        'cucumber.filter.tags',
+        'cucumber.filter.name'
+]
+def cucumberAreas = [
+        common : [
+                taskName       : 'testCommon',
+                taskSuffix     : 'Common',
+                baseUrl        : 'https://playwright.dev',
+                runnerClassName: 'com.example.e2e.tests.runner.CommonRunCucumberTest',
+                glue           : [
+                        'com.example.e2e.core.hooks',
+                        'com.example.e2e.tests.steps.common'
+                ],
+                parallelEnabled: false,
+                parallelism    : 1,
+                explore        : [
+                        enabled        : true,
+                        path           : '/',
+                        testIdAttribute: 'data-testid'
+                ]
+        ],
+        demoapp: [
+                taskName       : 'testDemoApp',
+                taskSuffix     : 'DemoApp',
+                baseUrl        : 'https://playwright.dev',
+                runnerClassName: 'com.example.e2e.tests.runner.demoapp.DemoAppRunCucumberTest',
+                glue           : [
+                        'com.example.e2e.core.hooks',
+                        'com.example.e2e.tests.steps.common',
+                        'com.example.e2e.tests.steps.demoapp'
+                ],
+                parallelEnabled: false,
+                parallelism    : 1,
+                explore        : [
+                        enabled        : true,
+                        path           : '/',
+                        testIdAttribute: 'data-testid'
+                ]
+        ]
+]
 
 dependencies {
-    implementation project(":core")
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
-    testImplementation(platform("io.qameta.allure:allure-bom:${allureJavaVersion}"))
-    testImplementation("io.cucumber:cucumber-java:${cucumberVersion}")
-    testImplementation("io.cucumber:cucumber-junit-platform-engine:${cucumberVersion}")
-    testImplementation("org.junit.platform:junit-platform-suite")
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("io.qameta.allure:allure-cucumber7-jvm")
-    testImplementation("io.qameta.allure:allure-junit5")
+    testImplementation platform("io.qameta.allure:allure-bom:${allureVersion}")
+    testImplementation project(':core')
+    testImplementation "io.qameta.allure:allure-cucumber7-jvm"
+    testImplementation "io.qameta.allure:allure-junit-platform"
+    testImplementation "io.cucumber:cucumber-java:${cucumberVersion}"
+    testImplementation "io.cucumber:cucumber-junit-platform-engine:${cucumberVersion}"
+    testImplementation "org.junit.platform:junit-platform-suite:${junitPlatformVersion}"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}"
 }
 
-allure {
-    adapter {
-        autoconfigure.set(true)
-        aspectjWeaver.set(false)
+def cucumberPluginValue = 'pretty,summary,io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm'
+def localBrowserModeEnabled = Boolean.parseBoolean(
+        System.getProperty('playwright.use.local.browser', Boolean.toString(isWindows))
+)
 
-        frameworks {
-            junit5 {
-                enabled.set(true)
+def configureSharedRuntime = { Test task, String artifactsRoot ->
+    task.systemProperty 'artifacts.dir', artifactsRoot
+    task.systemProperty 'cucumber.plugin', cucumberPluginValue
+    task.systemProperty 'playwright.use.local.browser', localBrowserModeEnabled.toString()
+    task.systemProperty 'allure.results.directory', layout.buildDirectory.dir('allure-results').get().asFile.absolutePath
+    task.systemProperty 'cucumber.junit-platform.naming-strategy', 'long'
+
+    if (localBrowserModeEnabled) {
+        task.environment 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', '1'
+    }
+}
+
+def forwardRuntimeProperties = { Test task ->
+    forwardedSystemProperties.each { propertyName ->
+        def propertyValue = System.getProperty(propertyName)
+        if (propertyValue != null) {
+            task.systemProperty propertyName, propertyValue
+        }
+    }
+}
+
+def configureAreaTestTask = { Test task, String areaName, Map<String, ?> areaConfig ->
+    task.group = 'verification'
+    task.description = "Runs the ${areaName} Cucumber area."
+    task.testClassesDirs = sourceSets.test.output.classesDirs
+    task.classpath = sourceSets.test.runtimeClasspath
+
+    task.filter {
+        includeTestsMatching(areaConfig.runnerClassName)
+        failOnNoMatchingTests = true
+    }
+
+    def baseUrl = System.getProperty('base.url') ?: areaConfig.baseUrl
+    if (baseUrl != null) {
+        task.systemProperty 'base.url', baseUrl
+    }
+    task.systemProperty 'cucumber.glue', areaConfig.glue.join(',')
+    task.systemProperty 'cucumber.execution.parallel.enabled', areaConfig.parallelEnabled.toString()
+
+    configureSharedRuntime(task, layout.buildDirectory.dir("artifacts/${areaName}").get().asFile.absolutePath)
+    forwardRuntimeProperties(task)
+
+    if (areaConfig.parallelEnabled) {
+        task.systemProperty 'cucumber.execution.parallel.config.strategy', 'fixed'
+        task.systemProperty 'cucumber.execution.parallel.config.fixed.parallelism', areaConfig.parallelism.toString()
+    }
+}
+
+def requirePlaywrightCliExploreSupport = {
+    if (!isWindows) {
+        throw new GradleException('Playwright CLI exploration tasks are native Windows-only. Run them from Windows/Windsurf, not WSL/Linux.')
+    }
+
+    String registry = System.getenv(firmNpmRegistryEnv)
+    if (registry == null || registry.isBlank()) {
+        throw new GradleException("${firmNpmRegistryEnv} must point to the firm npm Artifactory registry.")
+    }
+    registry
+}
+
+def playwrightCliCommandLine = { List<String> args ->
+    [npmExecutable, 'exec', '--yes', '--package', "@playwright/cli@${playwrightCliVersion}", '--', 'playwright-cli'] + args
+}
+
+def runPlaywrightCli = { List<String> args, String registry, boolean ignoreFailures = false ->
+    exec {
+        workingDir rootProject.projectDir
+        environment 'NPM_CONFIG_REGISTRY', registry
+        commandLine playwrightCliCommandLine(args)
+        ignoreExitValue = ignoreFailures
+    }
+}
+
+def resolveExploreUrl = { String baseUrl, String path ->
+    if (path == null || path.isBlank() || path == '/') {
+        return baseUrl
+    }
+
+    String normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl
+    String normalizedPath = path.startsWith('/') ? path : "/${path}"
+    "${normalizedBaseUrl}${normalizedPath}"
+}
+
+def writePlaywrightCliConfig = { String areaName, Map<String, ?> areaConfig ->
+    Map<String, ?> exploreConfig = areaConfig.explore ?: [:]
+    File outputDir = layout.buildDirectory.dir("artifacts/${areaName}/playwright-cli").get().asFile
+    File configFile = layout.buildDirectory.file("playwright-cli/${areaName}/cli.config.json").get().asFile
+
+    outputDir.mkdirs()
+    configFile.parentFile.mkdirs()
+    configFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+            browser        : [
+                    browserName   : 'chromium',
+                    isolated      : true,
+                    launchOptions : [
+                            channel : 'msedge',
+                            headless: false
+                    ],
+                    contextOptions: [
+                            viewport: [
+                                    width : 1440,
+                                    height: 900
+                            ]
+                    ]
+            ],
+            saveVideo      : [
+                    width : 1440,
+                    height: 900
+            ],
+            outputDir      : outputDir.absolutePath,
+            outputMode     : 'file',
+            testIdAttribute: exploreConfig.testIdAttribute ?: 'data-testid',
+            codegen        : 'typescript'
+    ]))
+    configFile
+}
+
+cucumberAreas.each { areaName, areaConfig ->
+    tasks.register(areaConfig.taskName, Test) { task ->
+        configureAreaTestTask(task, areaName, areaConfig)
+    }
+
+    def reportAliasTaskName = "allureReport${areaConfig.taskSuffix}"
+    def serveAliasTaskName = "allureServe${areaConfig.taskSuffix}"
+    def hyphenatedReportAliasTaskName = "allureReport-${areaName}"
+    def hyphenatedServeAliasTaskName = "allureServe-${areaName}"
+
+    tasks.register(reportAliasTaskName) {
+        group = 'verification'
+        description = "Runs ${areaName} and generates the Allure report."
+        dependsOn tasks.named(areaConfig.taskName)
+        finalizedBy tasks.named('allureReport')
+    }
+
+    tasks.register(serveAliasTaskName) {
+        group = 'verification'
+        description = "Runs ${areaName} and serves the Allure report."
+        dependsOn tasks.named(areaConfig.taskName)
+        finalizedBy tasks.named('allureServe')
+    }
+
+    tasks.register(hyphenatedReportAliasTaskName) {
+        group = 'verification'
+        description = "Alias for ${reportAliasTaskName}."
+        dependsOn tasks.named(reportAliasTaskName)
+    }
+
+    tasks.register(hyphenatedServeAliasTaskName) {
+        group = 'verification'
+        description = "Alias for ${serveAliasTaskName}."
+        dependsOn tasks.named(serveAliasTaskName)
+    }
+
+    if (areaConfig.explore?.enabled != false) {
+        def sessionName = "e2e-${areaName}"
+        def exploreTaskName = "explore${areaConfig.taskSuffix}"
+        def closeExploreTaskName = "closeExplore${areaConfig.taskSuffix}"
+
+        tasks.register(exploreTaskName) {
+            group = 'playwright cli'
+            description = "Opens ${areaName} in a local Playwright CLI session for exploration."
+
+            doLast {
+                String registry = requirePlaywrightCliExploreSupport()
+                File configFile = writePlaywrightCliConfig(areaName, areaConfig)
+                String baseUrl = System.getProperty('base.url') ?: areaConfig.baseUrl
+                String explorePath = System.getProperty('explore.path') ?: (areaConfig.explore?.path ?: '/')
+                String exploreUrl = resolveExploreUrl(baseUrl, explorePath)
+                List<String> sessionArgs = ["-s=${sessionName}", '--config', configFile.absolutePath]
+
+                runPlaywrightCli(sessionArgs + ['close'], registry, true)
+                runPlaywrightCli(sessionArgs + ['delete-data'], registry, true)
+                runPlaywrightCli(sessionArgs + ['open', '--headed'], registry)
+                runPlaywrightCli(sessionArgs + ['tracing-start'], registry)
+                runPlaywrightCli(sessionArgs + ['video-start'], registry)
+                runPlaywrightCli(sessionArgs + ['goto', exploreUrl], registry)
+            }
+        }
+
+        tasks.register(closeExploreTaskName) {
+            group = 'playwright cli'
+            description = "Stops recording and closes the ${areaName} Playwright CLI session."
+
+            doLast {
+                String registry = requirePlaywrightCliExploreSupport()
+                File configFile = writePlaywrightCliConfig(areaName, areaConfig)
+                List<String> sessionArgs = ["-s=${sessionName}", '--config', configFile.absolutePath]
+
+                runPlaywrightCli(sessionArgs + ['tracing-stop'], registry, true)
+                runPlaywrightCli(sessionArgs + ['video-stop'], registry, true)
+                runPlaywrightCli(sessionArgs + ['close'], registry, true)
+                runPlaywrightCli(sessionArgs + ['delete-data'], registry, true)
             }
         }
     }
 }
 
-tasks.named("test", Test) {
-    doFirst {
-        delete(layout.buildDirectory.dir("allure-results").get().asFile)
-        layout.buildDirectory.dir("allure-results").get().asFile.mkdirs()
+tasks.register('showExploreSessions') {
+    group = 'playwright cli'
+    description = 'Shows the Playwright CLI session dashboard.'
+
+    doLast {
+        String registry = requirePlaywrightCliExploreSupport()
+        runPlaywrightCli(['show'], registry)
     }
+}
+
+tasks.register('testAllApps') {
+    group = 'verification'
+    description = 'Runs all area-specific Cucumber tasks.'
+    dependsOn cucumberAreas.collect { areaEntry -> tasks.named(areaEntry.value.taskName) }
+}
+
+test {
+    description = 'Runs the full Cucumber test suite.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    filter {
+        includeTestsMatching(fullSuiteRunnerClassName)
+        failOnNoMatchingTests = true
+    }
+
+    configureSharedRuntime(delegate, layout.buildDirectory.dir('artifacts/all').get().asFile.absolutePath)
+    forwardRuntimeProperties(delegate)
 }

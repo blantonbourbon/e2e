@@ -1,14 +1,18 @@
 plugins {
-    id "java-library"
+    id 'java-library'
 }
 
-def allureJavaVersion = "2.29.1"
-def playwrightVersion = "1.52.0"
+def playwrightVersion = '1.52.0'
+def cucumberVersion = '7.22.1'
+def slf4jVersion = '2.0.17'
+def allureVersion = rootProject.ext.allureVersion
 
 dependencies {
-    api("com.microsoft.playwright:playwright:${playwrightVersion}")
-    implementation(platform("io.qameta.allure:allure-bom:${allureJavaVersion}"))
-    implementation("io.qameta.allure:allure-java-commons")
-    testImplementation(platform("org.junit:junit-bom:5.10.3"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+    api platform("io.qameta.allure:allure-bom:${allureVersion}")
+    api "com.microsoft.playwright:playwright:${playwrightVersion}"
+    api "io.cucumber:cucumber-java:${cucumberVersion}"
+    api "io.qameta.allure:allure-java-commons"
+    api "org.slf4j:slf4j-api:${slf4jVersion}"
+
+    runtimeOnly "org.slf4j:slf4j-simple:${slf4jVersion}"
 }

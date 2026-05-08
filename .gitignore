@@ -1,4 +1,6 @@
 .gradle/
 build/
 */build/
-.vscode/
+out/
+gradle/wrapper/*.jar
+.gradle-user/
