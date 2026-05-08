@@ -1,207 +1,42 @@
-# AGENTS.md
+# Repository Guidelines
 
-This file gives repository-specific guidance for contributors and coding agents working in this repo.
+## Project Structure & Module Organization
 
-## Repo Summary
+This is a Java 21, Gradle, Playwright Java, Cucumber JVM, and JUnit Platform E2E framework. `settings.gradle` includes two modules: `core` for reusable framework behavior and `test-suite` for executable scenarios.
 
-- Project name: `e2e-framework`
-- Stack: Java 21, Gradle, Playwright Java, Cucumber JVM, JUnit Platform
-- Shape: multi-module test automation repo
-- Modules:
-  - `core`: reusable framework code
-  - `test-suite`: executable test scenarios, step definitions, and feature files
+- `core/src/main/java/com/example/e2e/core`: configuration, scenario context, Cucumber hooks, Playwright lifecycle, and artifact naming.
+- `test-suite/src/test/java/com/example/e2e/tests`: Cucumber runners and step definitions.
+- `test-suite/src/test/resources/features`: feature files grouped by area, for example `common/` and `demoapp/`.
+- `docs/`: onboarding and design notes. Do not commit generated `build/` artifacts.
 
-## Module Boundaries
+Keep browser/session lifecycle and shared runtime toggles in `core`. Keep app-specific selectors, assertions, and feature behavior in `test-suite`.
 
-Keep changes in the correct module. This matters more here than in a typical single-module test repo.
+## Build, Test, and Development Commands
 
-- Put reusable framework behavior in `core`
-  - browser/session lifecycle
-  - configuration and system property handling
-  - scenario-scoped shared state
-  - Cucumber hooks
-- Put business-facing test behavior in `test-suite`
-  - step definitions
-  - feature files
-  - app-specific selectors and assertions
-  - runner configuration tied to test execution
-
-If a change is only useful for one application or one feature area, it usually belongs in `test-suite`, not `core`.
-
-## Current Layout
-
-- `build.gradle`: shared Gradle configuration for all subprojects
-- `settings.gradle`: includes `core` and `test-suite`
-- `core/src/main/java/com/example/e2e/core`
-  - `config/FrameworkConfig.java`
-  - `context/ScenarioContext.java`
-  - `hooks/CucumberHooks.java`
-  - `playwright/*`
-- `test-suite/src/test/java/com/example/e2e/tests`
-  - `runner/CommonRunCucumberTest.java`
-  - `runner/RunCucumberTest.java`
-  - `runner/demoapp/DemoAppRunCucumberTest.java`
-  - `steps/common/*`
-  - `steps/demoapp/*`
-- `test-suite/src/test/resources/features`
-  - `common/*`
-  - `demoapp/*`
-
-## Working Conventions
-
-### Playwright usage
-
-- Do not create Playwright, Browser, or Page objects directly inside step definitions.
-- Use `PlaywrightManager` as the entry point for test code.
-- Reuse the session that `CucumberHooks` creates per scenario.
-- Prefer relative navigation such as `"/"` and let `base.url` control the environment.
-- Windows defaults to local-browser mode. The framework skips Playwright browser download there and defaults `browser=chromium` to the local `msedge` channel unless overridden.
-
-### Shared scenario state
-
-- Use `PlaywrightManager.scenarioContext()` for data that must move across steps in the same scenario.
-- Do not use static mutable state for cross-step data.
-- `ScenarioContext` is cleared automatically during teardown.
-
-### Feature and step organization
-
-- Keep feature files grouped by app or domain under `test-suite/src/test/resources/features/<app-name>/`.
-- Keep step definitions grouped the same way under `test-suite/src/test/java/com/example/e2e/tests/steps/<app-name>/`.
-- Keep `features/common` as an explicit shared area with its own runner and Gradle task.
-- Put cross-app reusable steps in `steps/common` and shared feature coverage in `features/common`.
-- When adding a new app, create both directories at the same time so boundaries stay aligned.
-- When adding a new app, also add an app-specific runner and `Test` task in `test-suite/build.gradle`.
-
-### Assertions and selectors
-
-- Keep assertions explicit and readable. The current codebase uses JUnit Jupiter assertions.
-- Prefer stable Playwright locators over brittle selectors.
-- Avoid `Thread.sleep(...)`; rely on Playwright waiting behavior unless there is a strong reason not to.
-
-### Configuration
-
-Central runtime settings are loaded from system properties in `FrameworkConfig`.
-
-Current supported properties:
-
-- `base.url`
-- `browser` with supported values `chromium`, `firefox`, `webkit`
-- `browser.channel`
-- `browser.executable.path`
-- `headless`
-- `slowmo`
-- `playwright.use.local.browser`
-- `artifacts.dir`
-
-If you add a new runtime toggle, wire it through `FrameworkConfig` instead of reading ad hoc system properties from multiple places.
-
-## Artifacts and Reports
-
-- Default artifact root is `build/artifacts`
-- Area-specific tasks override the root to `test-suite/build/artifacts/<area>`
-- Trace files are written under `test-suite/build/artifacts/<area>/traces`
-- Video directories are created under `test-suite/build/artifacts/<area>/videos`
-- `FrameworkConfig` also defines `test-suite/build/artifacts/<area>/screenshots`; failure screenshots are attached in hooks and also published to Allure on failure
-- Allure raw results are written under `test-suite/build/allure-results`
-- Cucumber native HTML/JSON report output is no longer the primary reporting path
-
-Keep generated artifacts out of version control unless the user explicitly asks otherwise.
-
-## Commands
-
-### Bootstrap
-
-The repo intentionally does not commit `gradle-wrapper.jar`.
-
-After cloning, generate the wrapper locally if needed:
+The repo intentionally omits `gradle-wrapper.jar`; generate it locally with `gradle wrapper` if needed.
 
 ```bash
-gradle wrapper
+./gradlew clean test                 # run the full Cucumber suite
+./gradlew :test-suite:testCommon     # run common feature area
+./gradlew :test-suite:testDemoApp    # run demo app feature area
+./gradlew :test-suite:testAllApps    # run all area-specific tasks
+./gradlew :test-suite:allureReport   # generate Allure report
 ```
 
-### Run all tests
+Override runtime settings with system properties, for example `-Dbase.url=https://playwright.dev -Dheadless=true`.
 
-```bash
-./gradlew clean test
-```
+## Coding Style & Naming Conventions
 
-`test` is a standard Gradle `Test` task that executes `com.example.e2e.tests.runner.RunCucumberTest`.
+Use Java 21 conventions, four-space indentation, and package names under `com.example.e2e`. Do not create `Playwright`, `Browser`, or `Page` directly in step definitions; use `PlaywrightManager`. Prefer stable Playwright locators and avoid `Thread.sleep(...)`. Add new runtime toggles through `FrameworkConfig`, not ad hoc `System.getProperty` calls.
 
-### Run one feature area
+## Testing Guidelines
 
-```bash
-./gradlew :test-suite:testCommon
-./gradlew :test-suite:testDemoApp
-```
+Feature files live under `features/<area>/`; matching steps live under `steps/<area>/`. When adding a new area, also add its runner and `cucumberAreas` entry in `test-suite/build.gradle` so `:test-suite:testAllApps` and the narrow area task include it; see `docs/new-app-onboarding.md`. Cross-app steps belong in `steps/common`. Use explicit JUnit Jupiter assertions with clear failure messages. For framework changes, run the full suite; for feature or step changes, run the narrowest relevant area first.
 
-### Run all areas explicitly
+## Commit & Pull Request Guidelines
 
-```bash
-./gradlew :test-suite:testAllApps
-```
+Recent history uses short imperative messages such as `chore: record journal` and `Align repository with E2E framework snapshot`. Keep commits focused, explain why behavior changed, and exclude generated artifacts. Pull requests should summarize scope, list validation commands, mention affected feature areas, and include screenshots or Allure links when UI behavior changes.
 
-### Generate Allure report
+## Security & Configuration Tips
 
-```bash
-./gradlew :test-suite:allureReport
-./gradlew :test-suite:allureServe
-```
-
-### Override runtime settings
-
-```bash
-./gradlew clean test \
-  -Dbase.url=https://playwright.dev \
-  -Dbrowser=chromium \
-  -Dheadless=true \
-  -Dslowmo=0
-```
-
-## Change Guidance
-
-When making edits, preserve the current architecture:
-
-- Keep `core` generic. Avoid leaking app-specific selectors, URLs, or business terms into it.
-- Keep `test-suite` focused on user-observable behavior.
-- Preserve package naming under `com.example.e2e`.
-- Prefer small, targeted additions over framework-wide abstractions unless multiple scenarios already need the same behavior.
-- Keep dynamic plugin/artifact/parallel configuration in `test-suite/build.gradle`.
-- Keep runners scope-only; use `junit-platform.properties` for broad defaults and let Gradle tasks override glue and runtime wiring per area.
-
-Good examples:
-
-- Adding a new reusable navigation helper in `core` when multiple test areas need it
-- Adding a new `demoapp` step definition in `test-suite` for one page flow
-- Adding a new feature folder and matching steps package for a new app
-
-Bad examples:
-
-- Creating raw Playwright sessions inside step classes
-- Reading system properties directly in many step files
-- Mixing common steps and one-off app steps in the same package without a clear reason
-
-## Validation Expectations
-
-Before finishing a change, validate at the narrowest sensible scope first, then broaden if needed.
-
-- For step or feature changes, run the relevant area-specific task such as `:test-suite:testCommon` or `:test-suite:testDemoApp`.
-- For framework changes in `core`, prefer running the full test suite because hooks and session lifecycle affect every scenario.
-- If tests are not run, state that clearly and explain why.
-
-## Files To Avoid Changing Casually
-
-- `gradle.properties`: contains repo-level Gradle behavior and a Java home override
-- `build.gradle`: shared configuration for every subproject
-- `test-suite/build.gradle`: area-specific test orchestration, glue, reports, and runtime property wiring
-- `test-suite/src/test/java/com/example/e2e/tests/runner/RunCucumberTest.java`: default full-suite runner used by Gradle `test`
-
-Change these only when the task genuinely requires repo-wide behavior changes.
-
-## Notes For Agents
-
-- Read existing step definitions and features before adding new ones. Match the current naming and package structure.
-- Prefer extending current hooks/config/session management instead of introducing parallel lifecycle code.
-- Preserve the current model: `test` runs the full-suite runner, each area has its own runner and Gradle `Test` task, and `testAllApps` remains the aggregate entrypoint for area tasks.
-- When onboarding a new app area, follow [docs/new-app-onboarding.md](/home/kratos/projects/e2e/docs/new-app-onboarding.md).
-- Do not commit generated `build/` output.
-- Do not add `gradle-wrapper.jar` unless explicitly requested. This repo currently omits it on purpose.
+Windows defaults to local-browser mode and `msedge` for Chromium. For UI exploration, use Windsurf with the approved `@playwright/cli` package and `FIRM_NPM_REGISTRY`; keep generated snapshots, videos, and scratch TypeScript out of version control.
