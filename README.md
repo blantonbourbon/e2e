@@ -132,7 +132,42 @@ These tasks run their own area-specific runners and generate separate reports an
 ./gradlew :test-suite:testAllApps
 ```
 
-### 7. Generate an Allure Report
+### 7. Record and Generate a Case Draft
+
+Use the Node-based recorder when you want to operate the browser first and turn the captured actions into Cucumber drafts afterwards:
+
+```bash
+./gradlew :test-suite:recordCase \
+  -Parea=demoapp \
+  -Pfeature=getting-started \
+  -Pscenario="User can open the getting started guide" \
+  -Ppath=/
+```
+
+Close the Playwright codegen window when the flow is complete. The raw recording is written under:
+
+```text
+test-suite/build/case-drafts/<area>/<feature>/
+```
+
+Then generate the Cucumber drafts:
+
+```bash
+./gradlew :test-suite:generateCaseFromRecording \
+  -Parea=demoapp \
+  -Pfeature=getting-started
+```
+
+This creates:
+
+```text
+test-suite/src/test/resources/features/<area>/<feature>.feature
+test-suite/src/test/java/com/example/e2e/tests/steps/<area>/<Feature>Steps.java
+```
+
+Generated feature files are tagged with `@draft` and use common draft interaction steps for simple clicks, fills, and visibility checks. Review the generated scenario language before treating it as a committed business case. Unsupported recorded actions are emitted as explicit TODO step definitions that fail until reviewed. Existing files are not overwritten unless you pass `-Pforce=true`.
+
+### 8. Generate an Allure Report
 
 ```bash
 ./gradlew :test-suite:allureReport
@@ -153,7 +188,7 @@ The hyphenated aliases also work:
 ./gradlew :test-suite:allureServe-demoapp
 ```
 
-### 8. Use with IntelliJ + Cucumber+
+### 9. Use with IntelliJ + Cucumber+
 
 If you have the `Cucumber+` plugin installed in IntelliJ IDEA, the recommended workflow is:
 
