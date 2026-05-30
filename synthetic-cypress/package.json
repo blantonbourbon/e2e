@@ -1,0 +1,16 @@
+{
+  "name": "synthetic-cypress",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "cypress run --spec cypress/e2e/catalog.cy.ts --browser electron --headless"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "cypress": "^13.17.0",
+    "typescript": "^5.8.3"
+  }
+}
