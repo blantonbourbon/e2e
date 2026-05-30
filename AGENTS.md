@@ -39,4 +39,4 @@ Recent history uses short imperative messages such as `chore: record journal` an
 
 ## Security & Configuration Tips
 
-Windows defaults to local-browser mode and `msedge` for Chromium. For UI exploration, use Windsurf with the approved `@playwright/cli` package and `FIRM_NPM_REGISTRY`; keep generated snapshots, videos, and scratch TypeScript out of version control.
+Windows defaults to local-browser mode and `msedge` for Chromium. For UI exploration, use Windsurf with the approved `@playwright/cli` package and `FIRM_NPM_REGISTRY`; keep generated snapshots, videos, and scratch TypeScript out of version control. For Cypress-to-Playwright migration in Windsurf, use the workspace workflow `/cypress-to-playwright-java`.
