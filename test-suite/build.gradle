@@ -40,7 +40,7 @@ def cucumberAreas = [
                         testIdAttribute: 'data-testid'
                 ]
         ],
-        demoapp: [
+        demoapp      : [
                 taskName       : 'testDemoApp',
                 taskSuffix     : 'DemoApp',
                 baseUrl        : 'https://playwright.dev',
@@ -56,6 +56,21 @@ def cucumberAreas = [
                         enabled        : true,
                         path           : '/',
                         testIdAttribute: 'data-testid'
+                ]
+        ],
+        migrationdemo: [
+                taskName       : 'testMigrationDemo',
+                taskSuffix     : 'MigrationDemo',
+                baseUrl        : 'https://playwright.dev',
+                runnerClassName: 'com.example.e2e.tests.runner.migrationdemo.MigrationDemoRunCucumberTest',
+                glue           : [
+                        'com.example.e2e.core.hooks',
+                        'com.example.e2e.tests.steps.migrationdemo'
+                ],
+                parallelEnabled: false,
+                parallelism    : 1,
+                explore        : [
+                        enabled: false
                 ]
         ]
 ]

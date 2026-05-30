@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Migration Demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
+      label, input { display: block; margin: 0.5rem 0; }
+      button, a { display: inline-block; margin-top: 1rem; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-testid="login-panel">
+        <h1>Migration Demo</h1>
+        <form data-testid="login-form">
+          <label>
+            Username
+            <input data-testid="username" name="username" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input data-testid="password" name="password" type="password" autocomplete="current-password" />
+          </label>
+          <button data-testid="sign-in" type="submit">Sign in</button>
+        </form>
+      </section>
+
+      <section data-testid="home-panel" hidden>
+        <h1>Migration Demo</h1>
+        <p data-testid="welcome-message"></p>
+        <a data-testid="catalog-link" href="catalog.html">Browse catalog</a>
+      </section>
+    </main>
+    <script>
+      const form = document.querySelector("[data-testid='login-form']");
+      const loginPanel = document.querySelector("[data-testid='login-panel']");
+      const homePanel = document.querySelector("[data-testid='home-panel']");
+      const welcomeMessage = document.querySelector("[data-testid='welcome-message']");
+
+      function render() {
+        const role = localStorage.getItem("migration-demo-role");
+        loginPanel.hidden = Boolean(role);
+        homePanel.hidden = !role;
+        welcomeMessage.textContent = role ? `Welcome, ${role}` : "";
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const username = form.elements.username.value;
+        const password = form.elements.password.value;
+
+        if (username === "standard" && password === "password") {
+          localStorage.setItem("migration-demo-role", "standard visitor");
+          render();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
