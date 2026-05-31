@@ -1,5 +1,62 @@
 # Cypress to Playwright Java/Cucumber Reference
 
+## Executable command reference
+
+Use Cypress source and Cypress run evidence as migration inputs. Manual Playwright recording is not the default Cypress migration path; use the recorder only for new Playwright/Cucumber case onboarding.
+
+Discover the migration CLI:
+
+```bash
+node tools/cypress-migration/src/cli.mjs --help
+```
+
+Run the checked-in synthetic source-mining/oracle path from the repo root:
+
+```bash
+./gradlew :test-suite:cypressMigrationToolTest --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationInventory --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationRisk --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationDraft --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationOracle --console=plain --no-daemon
+./gradlew :test-suite:testMigrationDemo --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationEvidence --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true
+```
+
+Run against a private or copied Cypress project with explicit paths:
+
+On WSL, use WSL-local Node.js and Java and prefer Linux-local source/output paths rather than `/mnt/c/...` to avoid slow file access, lock behavior differences, and CRLF surprises.
+
+```bash
+CYPRESS_SOURCE=/absolute/path/to/cypress-project
+MIGRATION_OUT=build/cypress-migration
+node tools/cypress-migration/src/cli.mjs inventory --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs risk --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs draft --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+```
+
+Synthetic oracle and evidence commands write under the same ignored output tree:
+
+```bash
+node tools/cypress-migration/src/cli.mjs oracle --source-root synthetic-cypress --output-dir build/cypress-migration --repo-root "$PWD" --port 8790
+node tools/cypress-migration/src/cli.mjs evidence --source-root synthetic-cypress --output-dir build/cypress-migration --repo-root "$PWD" --cypress-status passed --playwright-status passed
+```
+
+Generated migration evidence paths:
+
+```text
+build/cypress-migration/inventory.json
+build/cypress-migration/inventory.md
+build/cypress-migration/risk-flags.md
+build/cypress-migration/draft-features/*.feature
+build/cypress-migration/oracle-result.json
+build/cypress-migration/oracle-result.md
+build/cypress-migration/evidence-summary.json
+build/cypress-migration/evidence-summary.md
+```
+
+Keep private Cypress source, Cypress videos/screenshots/reports, and generated `build/cypress-migration/**` evidence out of commits unless the user explicitly requests an evidence package.
+
 ## Shape conversion
 
 | Cypress source | Target shape |
@@ -32,7 +89,7 @@ Small read-only fixtures can also become `Scenario Outline` examples when the fi
 | `cy.url().should(...)` | `page.url()` plus JUnit assertion |
 | `cy.location(...)` | `new URI(page.url())` plus JUnit assertion |
 | `cy.wait("@alias")` | `page.waitForResponse(...)` only when network outcome is the behavior |
-| `cy.wait(1000)` | Do not translate; wait on locator/state/business outcome |
+| `cy.wait(1000)` | Do not translate to `Thread.sleep(...)`; wait on locator/state/business outcome |
 | `cy.intercept(...)` | `page.route(...)`, `browserContext.route(...)`, or prefer real backend for E2E |
 | `cy.session(...)` | Central auth module; start with UI login, later swap to storage/API if needed |
 | `cy.request(...)` | Java HTTP helper only for setup/teardown; keep feature phrasing business-level |
@@ -122,9 +179,14 @@ public class CatalogInteractions {
 - If a test mutates shared data, design data isolation before migration.
 - If a custom command hides business behavior, turn it into an interaction module.
 - If a custom command hides technical setup, turn it into a support/helper module.
+- If inventory/risk output flags hidden setup, fixture-heavy data, aliases, sessions, numeric waits, unsupported commands, or uncertain translations, stop for manual review before promoting any draft.
+- If a draft feature is generated under `build/cypress-migration/draft-features/`, treat it as review material only; do not copy it into `test-suite/src/test/resources/features/**` until the scenario language, setup, and assertions have been reviewed.
+- Step definitions must not construct `Playwright`, `Browser`, or `Page` directly. Delegate browser operations to interaction/helper modules that access the framework-managed session through `PlaywrightManager`.
 
 ## Verification gotchas
 
+- The executable path is source-based: inventory/risk/draft commands read Cypress config/spec/support/fixture inputs and write ignored evidence under `build/cypress-migration/**`.
+- Validate both sides before marking migrated: run the Cypress oracle (`cypressMigrationOracle` or the aggregate check) and the Playwright/Cucumber area (`testMigrationDemo` or the migrated area's task).
 - Missing `gradle-wrapper.jar` means `gradlew` will fail until the wrapper is generated or a local/temporary Gradle is used.
 - Missing Java means no Gradle task can start; set `JAVA_HOME` for the validation command.
 - Maven Central may be blocked in some networks; use a temporary Gradle init script with an approved mirror for validation.

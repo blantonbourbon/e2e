@@ -136,6 +136,8 @@ These tasks run their own area-specific runners and generate separate reports an
 
 Use the Node-based recorder when you want to operate the browser first and turn the captured actions into Cucumber drafts afterwards:
 
+This record-first flow is for new Playwright/Cucumber cases. Cypress-to-Playwright migration is source-based; use the Cypress migration commands in the next section instead of manual recording as the default migration path.
+
 ```bash
 . tools/case-recorder/bin/env.sh
 sh tools/case-recorder/bin/doctor.sh
@@ -189,7 +191,58 @@ test-suite/build/case-drafts/<area>/<feature>/draft-summary.md
 
 Generated feature files are tagged with `@draft` and use common draft interaction steps for simple clicks, fills, and visibility checks. Review the generated scenario language and draft pack before treating it as a committed business case. Unsupported recorded actions are emitted as explicit failing step definitions until reviewed. Existing files are not overwritten unless you pass `-Pforce=true`.
 
-### 8. Generate an Allure Report
+### 8. Migrate Cypress Source With the Executable Oracle
+
+Use this path when converting Cypress tests. It mines Cypress source and validates against Cypress execution evidence; do not paste or commit private Cypress source, Cypress videos/screenshots, or generated migration evidence unless explicitly requested.
+
+Check the command surface:
+
+```bash
+node tools/cypress-migration/src/cli.mjs --help
+./gradlew :test-suite:tasks --all --console=plain --no-daemon
+```
+
+Run the checked-in synthetic source-mining and oracle path:
+
+```bash
+./gradlew :test-suite:cypressMigrationToolTest --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationInventory --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationRisk --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationDraft --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationOracle --console=plain --no-daemon
+./gradlew :test-suite:testMigrationDemo --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationEvidence --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true
+```
+
+For a private Cypress checkout, keep source and output paths explicit and keep output under ignored build directories:
+
+On WSL, run these with WSL-local Node.js and Java and prefer Linux-local source/output paths instead of `/mnt/c/...` to avoid Windows filesystem and CRLF issues.
+
+```bash
+CYPRESS_SOURCE=/absolute/path/to/cypress-project
+MIGRATION_OUT=build/cypress-migration
+node tools/cypress-migration/src/cli.mjs inventory --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs risk --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs draft --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+```
+
+Generated migration artifacts are ignored review evidence:
+
+```text
+build/cypress-migration/inventory.json
+build/cypress-migration/inventory.md
+build/cypress-migration/risk-flags.md
+build/cypress-migration/draft-features/*.feature
+build/cypress-migration/oracle-result.json
+build/cypress-migration/oracle-result.md
+build/cypress-migration/evidence-summary.json
+build/cypress-migration/evidence-summary.md
+```
+
+Before promoting a migrated slice, review mock-heavy or fixture-heavy specs, hidden custom commands, `cy.session`, aliases, unsupported constructs, write/shared-data flows, and uncertain translations. Numeric Cypress waits must not become `Thread.sleep(...)`, and step definitions must not construct `Playwright`, `Browser`, or `Page` directly; use the framework-managed `PlaywrightManager` through interactions/helpers.
+
+### 9. Generate an Allure Report
 
 ```bash
 ./gradlew :test-suite:allureReport
@@ -210,7 +263,7 @@ The hyphenated aliases also work:
 ./gradlew :test-suite:allureServe-demoapp
 ```
 
-### 9. Use with IntelliJ + Cucumber+
+### 10. Use with IntelliJ + Cucumber+
 
 If you have the `Cucumber+` plugin installed in IntelliJ IDEA, the recommended workflow is:
 

@@ -8,6 +8,7 @@ This workflow deliberately avoids manual Playwright recording as the primary mig
 
 - Do not commit private company Cypress source unless the user explicitly asks for it.
 - If the Cypress project is sensitive, inspect it in place or in an ignored scratch directory.
+- Keep generated migration evidence under ignored build output unless the user explicitly asks for a committed evidence package.
 - Preserve behavioral equivalence, not line-by-line Cypress shape.
 - Convert into this repo's framework:
   - features: `test-suite/src/test/resources/features/<area>/`
@@ -17,6 +18,7 @@ This workflow deliberately avoids manual Playwright recording as the primary mig
 - Do not create `Playwright`, `Browser`, or `Page` directly in step definitions; use `PlaywrightManager`.
 - Do not translate `cy.wait(number)` to `Thread.sleep(...)`.
 - Keep UI login centralized behind role language such as `Given the user is signed in as "standard user"`.
+- Manually review mock-heavy, fixture-heavy, hidden custom command setup, `cy.session`, aliases, numeric waits, unsupported commands, write/shared-data flows, and any uncertain draft conversion before promotion.
 
 ## Inputs To Request Or Discover
 
@@ -32,9 +34,70 @@ Ask for paths, not pasted proprietary code:
 
 If the source cannot be shared, generate a small synthetic Cypress fixture set and use it to validate the migration pattern before touching real tests.
 
+## Executable Path Quick Start
+
+From the repo root, first inspect the implemented command surface:
+
+```bash
+node tools/cypress-migration/src/cli.mjs --help
+./gradlew :test-suite:tasks --all --console=plain --no-daemon
+```
+
+For this repo's checked-in `synthetic-cypress` fixture, use the Gradle tasks:
+
+```bash
+./gradlew :test-suite:cypressMigrationToolTest --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationInventory --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationRisk --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationDraft --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationOracle --console=plain --no-daemon
+./gradlew :test-suite:testMigrationDemo --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationEvidence --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true
+```
+
+For a private Cypress project, keep source and output explicit:
+
+On WSL, use WSL-local Node.js and Java and prefer Linux-local source/output paths instead of `/mnt/c/...` so the migration tool does not cross the slow Windows filesystem boundary or inherit CRLF issues.
+
+```bash
+CYPRESS_SOURCE=/absolute/path/to/cypress-project
+MIGRATION_OUT=build/cypress-migration
+node tools/cypress-migration/src/cli.mjs inventory --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs risk --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs draft --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+```
+
+The synthetic oracle uses a transient loopback static server on `127.0.0.1:8790` and cleans up the exact PID it starts:
+
+```bash
+node tools/cypress-migration/src/cli.mjs oracle --source-root synthetic-cypress --output-dir build/cypress-migration --repo-root "$PWD" --port 8790
+```
+
+Generated migration evidence remains ignored:
+
+```text
+build/cypress-migration/inventory.json
+build/cypress-migration/inventory.md
+build/cypress-migration/risk-flags.md
+build/cypress-migration/draft-features/*.feature
+build/cypress-migration/oracle-result.json
+build/cypress-migration/oracle-result.md
+build/cypress-migration/evidence-summary.json
+build/cypress-migration/evidence-summary.md
+```
+
 ## Phase 1: Source Mining Draft
 
 Inventory Cypress specs before writing Java.
+
+Run:
+
+```bash
+./gradlew :test-suite:cypressMigrationInventory --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationRisk --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationDraft --console=plain --no-daemon
+```
 
 Collect this table:
 
@@ -63,6 +126,8 @@ Then produce, but do not blindly apply:
 - helper/auth/test-data candidates
 - risk flags
 
+Read `build/cypress-migration/risk-flags.md` before editing target source. Generated drafts under `build/cypress-migration/draft-features/` are review material, not production tests.
+
 Risk flags:
 
 - mock-heavy
@@ -76,6 +141,14 @@ Risk flags:
 ## Phase 2: Cypress Oracle Baseline
 
 Use Cypress execution as a behavior oracle, not as a script recorder.
+
+For the synthetic fixture, run:
+
+```bash
+./gradlew :test-suite:cypressMigrationOracle --console=plain --no-daemon
+```
+
+The command writes `build/cypress-migration/oracle-result.json` and `oracle-result.md`. It must not require a persistent service or leave port `8790` bound.
 
 For each migration candidate, capture:
 
@@ -120,7 +193,15 @@ Mapping rules:
 Run the narrowest area task first:
 
 ```bash
-./gradlew :test-suite:test<Area>
+./gradlew :test-suite:test<Area> --console=plain --no-daemon -Dheadless=true
+```
+
+For the built-in migration demo and aggregate check:
+
+```bash
+./gradlew :test-suite:testMigrationDemo --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationEvidence --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true
 ```
 
 If this repo has no `gradle-wrapper.jar`, use local Gradle or generate the wrapper locally as documented in `README.md`.
@@ -154,10 +235,15 @@ After each slice, update the migration approach:
 - Update docs or skills when a new Cypress pattern appears.
 - Prefer a small extractor script only after repeated source-mining work becomes mechanical.
 
-Potential extractor output:
+Executable source-mining output:
 
+- `build/cypress-migration/inventory.json`
 - `build/cypress-migration/inventory.md`
-- `build/cypress-migration/draft-features/`
 - `build/cypress-migration/risk-flags.md`
+- `build/cypress-migration/draft-features/`
+- `build/cypress-migration/oracle-result.json`
+- `build/cypress-migration/oracle-result.md`
+- `build/cypress-migration/evidence-summary.json`
+- `build/cypress-migration/evidence-summary.md`
 
 Do not let generated drafts become committed test code without review.

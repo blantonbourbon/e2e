@@ -220,7 +220,61 @@ test-suite/build/case-drafts/adminapp/user-profile/draft-summary.md
 - 不支持的录制动作会生成明确失败的 step，必须人工改成 app 专属 step 或 interaction。
 - 默认不覆盖已有文件；确认要重生成时再传 `-Pforce=true`。
 
-## 9. 验证清单
+## 9. Cypress 迁移和录制新用例的边界
+
+Cypress-to-Playwright 迁移不是上面的 recorder 默认路径。迁移时应先读取 Cypress source（`cypress.config.*`、`.cy.js` / `.cy.ts`、`cypress/e2e/features/**/*.feature`、`cypress/support/**/*`、`cypress/fixtures/**/*`），再用 Cypress 运行结果作为 oracle；manual Playwright recording 只用于 record-first 新用例 onboarding。
+
+从仓库根目录先查看可执行入口：
+
+```bash
+node tools/cypress-migration/src/cli.mjs --help
+./gradlew :test-suite:tasks --all --console=plain --no-daemon
+```
+
+内置 synthetic Cypress 迁移验证命令：
+
+```bash
+./gradlew :test-suite:cypressMigrationInventory --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationRisk --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationDraft --console=plain --no-daemon
+./gradlew :test-suite:cypressMigrationOracle --console=plain --no-daemon
+./gradlew :test-suite:testMigrationDemo --console=plain --no-daemon -Dheadless=true
+./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true
+```
+
+如果是私有 Cypress 项目，只传路径，不要粘贴或提交私有源码：
+
+WSL 下请使用 WSL-local Node.js / Java，并优先把 Cypress source 和 output 放在 Linux 本地路径，避免 `/mnt/c/...` 带来的性能、锁文件和 CRLF 问题。
+
+```bash
+CYPRESS_SOURCE=/absolute/path/to/cypress-project
+MIGRATION_OUT=build/cypress-migration
+node tools/cypress-migration/src/cli.mjs inventory --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs risk --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+node tools/cypress-migration/src/cli.mjs draft --source-root "$CYPRESS_SOURCE" --output-dir "$MIGRATION_OUT"
+```
+
+生成的迁移证据保持在 ignored build 目录中：
+
+```text
+build/cypress-migration/inventory.json
+build/cypress-migration/inventory.md
+build/cypress-migration/risk-flags.md
+build/cypress-migration/draft-features/*.feature
+build/cypress-migration/oracle-result.json
+build/cypress-migration/oracle-result.md
+build/cypress-migration/evidence-summary.json
+build/cypress-migration/evidence-summary.md
+```
+
+迁移安全规则：
+
+- 不要把 `cy.wait(number)` 迁移成 `Thread.sleep(...)`，改用 locator、URL、response 或业务状态等待。
+- step definitions 不要直接创建 `Playwright`、`Browser` 或 `Page`，统一通过 `PlaywrightManager` 和 interaction/helper 使用框架托管 session。
+- mock-heavy、fixture-heavy、隐藏 custom command setup、`cy.session`、alias、写共享数据、unsupported 或 uncertain conversion 都必须人工 review 后再提升为正式测试。
+- `build/cypress-migration/draft-features/` 下的草稿只是 review 资料，不要直接当成 production-ready test 提交。
+
+## 10. 验证清单
 
 新增一个 app 后，至少验证这些点：
 
@@ -230,7 +284,7 @@ test-suite/build/case-drafts/adminapp/user-profile/draft-summary.md
 4. `test-suite/build/artifacts/<app-name>/` 下能看到 trace / video 产物。
 5. 如果要开并行，先确认没有共享账号、共享测试数据和共享文件路径冲突。
 
-## 10. 不要做的事
+## 11. 不要做的事
 
 - 不要把新 app 的步骤直接塞进 `steps/common/`。
 - 不要复用别的 app runner 去跑新的 feature 目录。
