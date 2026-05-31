@@ -1,6 +1,8 @@
 .gradle/
 build/
 tools/case-recorder/node_modules/
+tools/cypress-migration/node_modules/
+synthetic-cypress/node_modules/
 */build/
 out/
 gradle/wrapper/*.jar

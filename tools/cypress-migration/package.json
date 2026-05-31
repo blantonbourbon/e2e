@@ -1,0 +1,15 @@
+{
+  "name": "e2e-cypress-migration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "inventory": "node src/cli.mjs inventory",
+    "test": "node --test test/*.test.mjs"
+  },
+  "bin": {
+    "cypress-migration": "./src/cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
