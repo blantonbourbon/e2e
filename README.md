@@ -137,6 +137,26 @@ These tasks run their own area-specific runners and generate separate reports an
 Use the Node-based recorder when you want to operate the browser first and turn the captured actions into Cucumber drafts afterwards:
 
 ```bash
+. tools/case-recorder/bin/env.sh
+sh tools/case-recorder/bin/doctor.sh
+```
+
+The doctor must pass before recording. On WSL, it rejects Windows-backed executables such as `/mnt/c/.../npm`; install and use WSL-local Node.js, npm, and Java 21 so recording and generation do not fall back to Windows filesystem access. The optional `env.sh` helper adds `$HOME/.local/toolchains/node-current/bin` and `$HOME/.sdkman/candidates/java/current/bin` when they exist.
+
+On Windows, run from a Windows-local checkout, not a `\\wsl.localhost\...` path. Windows Gradle can fail while hashing files on WSL UNC/mapped drives. From `cmd.exe`, use:
+
+```bat
+call tools\case-recorder\bin\env.cmd
+gradlew.bat :test-suite:caseRecorderTest
+```
+
+To run the recorder's own unit tests through Gradle:
+
+```bash
+./gradlew :test-suite:caseRecorderTest
+```
+
+```bash
 ./gradlew :test-suite:recordCase \
   -Parea=demoapp \
   -Pfeature=getting-started \
@@ -163,9 +183,11 @@ This creates:
 ```text
 test-suite/src/test/resources/features/<area>/<feature>.feature
 test-suite/src/test/java/com/example/e2e/tests/steps/<area>/<Feature>Steps.java
+test-suite/build/case-drafts/<area>/<feature>/case-draft.json
+test-suite/build/case-drafts/<area>/<feature>/draft-summary.md
 ```
 
-Generated feature files are tagged with `@draft` and use common draft interaction steps for simple clicks, fills, and visibility checks. Review the generated scenario language before treating it as a committed business case. Unsupported recorded actions are emitted as explicit failing step definitions until reviewed. Existing files are not overwritten unless you pass `-Pforce=true`.
+Generated feature files are tagged with `@draft` and use common draft interaction steps for simple clicks, fills, and visibility checks. Review the generated scenario language and draft pack before treating it as a committed business case. Unsupported recorded actions are emitted as explicit failing step definitions until reviewed. Existing files are not overwritten unless you pass `-Pforce=true`.
 
 ### 8. Generate an Allure Report
 

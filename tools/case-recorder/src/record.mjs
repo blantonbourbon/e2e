@@ -38,8 +38,6 @@ async function main() {
     createdAt: new Date().toISOString()
   };
 
-  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
-
   const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
   const args = [
     "exec",
@@ -74,6 +72,8 @@ async function main() {
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+
+  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
 }
 
 main().catch((error) => {

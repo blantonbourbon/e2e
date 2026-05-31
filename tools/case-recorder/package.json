@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "doctor": "node src/doctor.mjs",
+    "doctor:shell": "sh bin/doctor.sh",
+    "test": "node --test test/*.test.mjs",
     "record": "node src/record.mjs",
     "generate": "node src/generate.mjs"
   },

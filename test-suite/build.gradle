@@ -334,9 +334,49 @@ tasks.register('showExploreSessions') {
     }
 }
 
+tasks.register('caseRecorderCheck') {
+    group = 'case onboarding'
+    description = 'Checks the WSL/local toolchain required by the case recorder.'
+
+    doLast {
+        List<String> doctorCommand = isWindows
+                ? [
+                        nodeExecutable,
+                        caseRecorderDir.toPath().resolve('src/doctor.mjs').toFile().absolutePath,
+                        '--repo-root',
+                        rootProject.projectDir.absolutePath
+                ]
+                : [
+                        'sh',
+                        caseRecorderDir.toPath().resolve('bin/doctor.sh').toFile().absolutePath,
+                        '--repo-root',
+                        rootProject.projectDir.absolutePath
+                ]
+
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(doctorCommand)
+        }
+    }
+}
+
+tasks.register('caseRecorderTest') {
+    group = 'verification'
+    description = 'Runs the case recorder unit tests.'
+    dependsOn tasks.named('caseRecorderCheck')
+
+    doLast {
+        exec {
+            workingDir caseRecorderDir
+            commandLine(npmExecutable, 'test')
+        }
+    }
+}
+
 tasks.register('recordCase') {
     group = 'case onboarding'
     description = 'Records browser actions into a Java Playwright draft under test-suite/build/case-drafts.'
+    dependsOn tasks.named('caseRecorderCheck')
 
     doLast {
         String areaName = requireProjectProperty('area')
@@ -408,6 +448,7 @@ def generateCaseFromRecordingAction = {
 tasks.register('generateCaseFromRecording') {
     group = 'case onboarding'
     description = 'Generates feature and step-definition drafts from a recorded case.'
+    dependsOn tasks.named('caseRecorderCheck')
 
     doLast(generateCaseFromRecordingAction)
 }
@@ -415,6 +456,7 @@ tasks.register('generateCaseFromRecording') {
 tasks.register('generateCase') {
     group = 'case onboarding'
     description = 'Alias for generateCaseFromRecording.'
+    dependsOn tasks.named('caseRecorderCheck')
 
     doLast(generateCaseFromRecordingAction)
 }

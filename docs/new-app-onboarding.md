@@ -162,6 +162,26 @@ Windows 下默认开启本地浏览器模式：
 如果新 area 已经在 `cucumberAreas` 注册，并且 `glue` 包含 `com.example.e2e.tests.steps.common`，可以先用 recorder 操作浏览器，再生成 Cucumber 草稿：
 
 ```bash
+. tools/case-recorder/bin/env.sh
+sh tools/case-recorder/bin/doctor.sh
+```
+
+doctor 必须先通过。WSL 下它会拒绝 `/mnt/c/...` 这类 Windows 侧 `node` / `npm` / `java`，避免录制和生成链路绕回 Windows 文件系统。可选的 `env.sh` 会在存在时加入 `$HOME/.local/toolchains/node-current/bin` 和 `$HOME/.sdkman/candidates/java/current/bin`。
+
+Windows 端请在 Windows 本地 checkout 中运行，不要直接在 `\\wsl.localhost\...` 路径上跑 `gradlew.bat`；Gradle 在 WSL UNC / 映射盘上可能无法创建文件哈希服务。`cmd.exe` 下可以先执行：
+
+```bat
+call tools\case-recorder\bin\env.cmd
+gradlew.bat :test-suite:caseRecorderTest
+```
+
+如果改过 recorder 本身，先跑它自己的测试：
+
+```bash
+./gradlew :test-suite:caseRecorderTest
+```
+
+```bash
 ./gradlew :test-suite:recordCase \
   -Parea=adminapp \
   -Pfeature=user-profile \
@@ -188,11 +208,14 @@ test-suite/build/case-drafts/adminapp/user-profile/
 ```text
 test-suite/src/test/resources/features/adminapp/user-profile.feature
 test-suite/src/test/java/com/example/e2e/tests/steps/adminapp/UserProfileSteps.java
+test-suite/build/case-drafts/adminapp/user-profile/case-draft.json
+test-suite/build/case-drafts/adminapp/user-profile/draft-summary.md
 ```
 
 落地规则：
 
 - 生成的 feature 会带 `@draft`，合并前需要改成稳定业务语言。
+- `case-draft.json` 和 `draft-summary.md` 会保留 action inventory，方便先 review 再提升为正式用例。
 - 简单点击、输入、可见性断言会复用 `steps/common/DraftInteractionSteps.java`。
 - 不支持的录制动作会生成明确失败的 step，必须人工改成 app 专属 step 或 interaction。
 - 默认不覆盖已有文件；确认要重生成时再传 `-Pforce=true`。
