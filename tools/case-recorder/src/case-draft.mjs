@@ -6,12 +6,16 @@ export function generateCaseDraft(recording, options) {
   const scenario = textOr(options.scenario, humanize(feature));
   const fallbackPath = textOr(options.path, "/");
   const baseUrl = textOr(options.baseUrl);
+  const resolvedUrl = textOr(options.resolvedUrl);
   const statements = extractRecordedStatements(recording);
   const conversion = convertStatements(statements, fallbackPath, baseUrl);
   const draft = {
     area,
     feature,
     scenario,
+    baseUrl,
+    path: fallbackPath,
+    resolvedUrl,
     steps: conversion.steps,
     unsupportedActions: conversion.unsupported,
     actionInventory: conversion.actionInventory
@@ -79,14 +83,21 @@ export function renderSteps(area, feature, unsupported) {
 }
 
 export function renderDraftPack(draft) {
-  return `${JSON.stringify({
+  const pack = {
     area: draft.area,
     feature: draft.feature,
     scenario: draft.scenario,
+    baseUrl: draft.baseUrl,
+    path: draft.path,
+    resolvedUrl: draft.resolvedUrl,
     steps: draft.steps,
     unsupportedActions: draft.unsupportedActions,
-    actionInventory: draft.actionInventory
-  }, null, 2)}\n`;
+    actionInventory: draft.actionInventory,
+    generatedFiles: draft.generatedFiles,
+    reviewWork: draft.reviewWork,
+    nextValidationCommand: draft.nextValidationCommand
+  };
+  return `${JSON.stringify(removeUndefined(pack), null, 2)}\n`;
 }
 
 export function renderDraftSummary(draft) {
@@ -95,6 +106,9 @@ export function renderDraftSummary(draft) {
     "",
     `- Area: ${draft.area}`,
     `- Scenario: ${draft.scenario}`,
+    ...(draft.baseUrl ? [`- Base URL: ${draft.baseUrl}`] : []),
+    ...(draft.path ? [`- Path: ${draft.path}`] : []),
+    ...(draft.resolvedUrl ? [`- Resolved URL: ${draft.resolvedUrl}`] : []),
     `- Supported actions: ${draft.actionInventory.filter(action => action.supported).length}`,
     `- Unsupported actions: ${draft.unsupportedActions.length}`,
     "",
@@ -108,6 +122,24 @@ export function renderDraftSummary(draft) {
     for (const action of draft.unsupportedActions) {
       lines.push(`- ${action.actionNumber}: \`${action.statement.replace(/`/g, "\\`")}\``);
     }
+  }
+
+  if (draft.generatedFiles?.length > 0) {
+    lines.push("", "## Generated Files", "");
+    for (const filePath of draft.generatedFiles) {
+      lines.push(`- ${filePath}`);
+    }
+  }
+
+  if (draft.reviewWork?.length > 0) {
+    lines.push("", "## Review Work", "");
+    for (const item of draft.reviewWork) {
+      lines.push(`- ${item}`);
+    }
+  }
+
+  if (draft.nextValidationCommand) {
+    lines.push("", "## Next Validation", "", `Next validation command: \`${draft.nextValidationCommand}\``);
   }
 
   return `${lines.join("\n")}\n`;
@@ -350,4 +382,10 @@ function textOr(value, fallback = undefined) {
     return fallback;
   }
   return value.trim();
+}
+
+function removeUndefined(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([_key, entryValue]) => entryValue !== undefined)
+  );
 }
