@@ -28,17 +28,34 @@ export function createAreaConfig({ areaName, taskSuffix, baseUrl, explorePath, t
 }
 
 export function findRegisteredArea(contents, areaName) {
-  const block = findCucumberAreasBlock(contents);
-  const blockContents = contents.slice(block.openIndex + 1, block.closeIndex);
-  const match = new RegExp(`(^|\\n)[ \\t]*${escapeRegex(areaName)}\\s*:\\s*\\[`).exec(blockContents);
-  if (!match) {
-    return null;
-  }
+  return listRegisteredAreas(contents).find((area) => area.name === areaName) ?? null;
+}
 
-  const entryStart = block.openIndex + 1 + match.index + match[1].length;
-  const entryOpen = contents.indexOf("[", entryStart);
-  const entryClose = findMatchingBracket(contents, entryOpen);
-  const entry = contents.slice(entryStart, entryClose + 1);
+export function listRegisteredAreas(contents) {
+  return listAreaEntries(contents).map(({ areaName, entry }) => parseAreaEntry(areaName, entry));
+}
+
+export function findNewAreaRegistrationConflicts(contents, areaName, area) {
+  const conflicts = [];
+  for (const registeredArea of listRegisteredAreas(contents)) {
+    if (registeredArea.name === areaName) {
+      conflicts.push(`Area '${areaName}' is already registered in cucumberAreas`);
+      continue;
+    }
+    if (registeredArea.taskName === area.taskName) {
+      conflicts.push(`Gradle task '${area.taskName}' is already used by area '${registeredArea.name}'`);
+    }
+    if (registeredArea.taskSuffix === area.taskSuffix) {
+      conflicts.push(`Gradle task suffix '${area.taskSuffix}' is already used by area '${registeredArea.name}'`);
+    }
+    if (registeredArea.runnerFqn === area.runnerFqn) {
+      conflicts.push(`Runner class '${area.runnerFqn}' is already used by area '${registeredArea.name}'`);
+    }
+  }
+  return conflicts;
+}
+
+function parseAreaEntry(areaName, entry) {
   const taskSuffix = readGroovyStringField(entry, "taskSuffix") ?? toPascalCase(areaName);
   const taskName = readGroovyStringField(entry, "taskName") ?? `test${taskSuffix}`;
   const runnerFqn = readGroovyStringField(entry, "runnerClassName") ??
@@ -55,7 +72,8 @@ export function findRegisteredArea(contents, areaName) {
     runnerFqn,
     glue: readGlue(entry),
     parallelEnabled: /parallelEnabled\s*:\s*true/.test(entry),
-    parallelism: Number.parseInt(entry.match(/parallelism\s*:\s*(\d+)/)?.[1] ?? "1", 10)
+    parallelism: Number.parseInt(entry.match(/parallelism\s*:\s*(\d+)/)?.[1] ?? "1", 10),
+    entry
   };
 }
 
@@ -99,6 +117,66 @@ function findCucumberAreasBlock(contents) {
   const openIndex = contents.indexOf("[", declarationIndex);
   const closeIndex = findMatchingBracket(contents, openIndex);
   return { openIndex, closeIndex };
+}
+
+function listAreaEntries(contents) {
+  const block = findCucumberAreasBlock(contents);
+  const entries = [];
+  let index = block.openIndex + 1;
+
+  while (index < block.closeIndex) {
+    index = skipSeparators(contents, index, block.closeIndex);
+    if (index >= block.closeIndex) {
+      break;
+    }
+
+    const nameMatch = /^[A-Za-z][A-Za-z0-9_]*/.exec(contents.slice(index));
+    if (!nameMatch) {
+      index += 1;
+      continue;
+    }
+
+    const areaName = nameMatch[0];
+    index += areaName.length;
+    index = skipWhitespace(contents, index, block.closeIndex);
+    if (contents[index] !== ":") {
+      index += 1;
+      continue;
+    }
+
+    index += 1;
+    index = skipWhitespace(contents, index, block.closeIndex);
+    if (contents[index] !== "[") {
+      index += 1;
+      continue;
+    }
+
+    const entryOpen = index;
+    const entryClose = findMatchingBracket(contents, entryOpen);
+    entries.push({
+      areaName,
+      entry: contents.slice(entryOpen, entryClose + 1)
+    });
+    index = entryClose + 1;
+  }
+
+  return entries;
+}
+
+function skipSeparators(contents, index, endIndex) {
+  let current = index;
+  while (current < endIndex && /[\s,]/.test(contents[current])) {
+    current += 1;
+  }
+  return current;
+}
+
+function skipWhitespace(contents, index, endIndex) {
+  let current = index;
+  while (current < endIndex && /\s/.test(contents[current])) {
+    current += 1;
+  }
+  return current;
 }
 
 function findMatchingBracket(contents, openIndex) {
@@ -164,6 +242,3 @@ function unescapeGroovyString(value) {
   return value.replace(/\\'/g, "'").replace(/\\\\/g, "\\");
 }
 
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}

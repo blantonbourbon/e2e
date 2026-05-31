@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +12,8 @@ import {
   planCaseScaffold,
   resolveCaseTarget
 } from "../src/scaffold.mjs";
+import { createAreaConfig, renderUpdatedBuildGradle } from "../src/gradle-areas.mjs";
+import { renderRunner } from "../src/scaffold-render.mjs";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDir, "../../..");
@@ -111,6 +114,7 @@ test("plans and generates a complete new-area scaffold with runtime defaults", a
 
 test("reuses an existing registered area without duplicate runner or Gradle entry", async () => {
   const repo = await createTempRepo();
+  await copyRegisteredRunner(repo, "demoapp", "DemoAppRunCucumberTest");
   const originalBuildGradle = await readFile(path.join(repo, "test-suite/build.gradle"), "utf8");
   const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "demoapp", "fresh-case");
 
@@ -127,15 +131,17 @@ test("reuses an existing registered area without duplicate runner or Gradle entr
 
   assert.equal(plan.area.existing, true);
   assert.equal(plan.area.taskName, "testDemoApp");
-  assert.equal(plan.operations.some((operation) => operation.kind === "runner"), false);
-  assert.equal(plan.operations.some((operation) => operation.kind === "gradle-registration"), false);
+  assert.equal(plan.operations.find((operation) => operation.kind === "runner")?.status, "skip");
+  assert.equal(plan.operations.find((operation) => operation.kind === "gradle-registration")?.status, "skip");
 
   const result = await applyScaffoldPlan(plan);
   assert.match(result.summary, /Reused registered area demoapp \(testDemoApp\)/);
+  assert.match(result.summary, /Skipped \[skip] runner/);
+  assert.match(result.summary, /Skipped \[skip] gradle-registration/);
   assert.equal(await readFile(path.join(repo, "test-suite/build.gradle"), "utf8"), originalBuildGradle);
   assert.equal(
     existsSync(path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/runner/demoapp/DemoAppRunCucumberTest.java")),
-    false
+    true
   );
   assert.equal(
     existsSync(path.join(repo, "test-suite/src/test/resources/features/demoapp/fresh-case.feature")),
@@ -257,6 +263,214 @@ test("refuses source conflicts before writing any scaffold files", async () => {
   );
 });
 
+test("dry-run reports every planned change without modifying files or git status", async () => {
+  const repo = await createTempRepo();
+  initializeGitRepo(repo);
+  const beforeSnapshot = await snapshotTree(repo);
+  const beforeStatus = gitStatus(repo);
+  const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "user-profile");
+
+  const plan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "user-profile",
+    taskSuffix: "AdminApp",
+    scenario: "User opens profile",
+    baseUrl: "https://app.example.test",
+    path: "/profile",
+    recording: supportedRecording
+  });
+
+  const result = await applyScaffoldPlan(plan, { dryRun: true });
+
+  assert.equal(result.written.length, 0);
+  assert.match(result.summary, /Would create \[create].*user-profile\.feature/);
+  assert.match(result.summary, /Would create \[create].*UserProfileSteps\.java/);
+  assert.match(result.summary, /Would create \[create].*AdminAppRunCucumberTest\.java/);
+  assert.match(result.summary, /Would update \[update].*test-suite\/build\.gradle/);
+  assert.match(result.summary, /Would create \[create].*metadata\.json/);
+  assert.match(result.summary, /Would create \[create].*case-draft\.json/);
+  assert.match(result.summary, /Would create \[create].*draft-summary\.md/);
+  assert.match(result.summary, /Gradle task: testAdminApp/);
+  assert.deepEqual(await snapshotTree(repo), beforeSnapshot);
+  assert.equal(gitStatus(repo), beforeStatus);
+  assert.equal(existsSync(path.join(
+    repo,
+    "test-suite/src/test/resources/features/adminapp/user-profile.feature"
+  )), false);
+  assert.equal(existsSync(path.join(draftDir, "metadata.json")), false);
+});
+
+test("default execution refuses existing source conflicts and preserves checksums", async () => {
+  const repo = await createTempRepo();
+  const featurePath = path.join(repo, "test-suite/src/test/resources/features/adminapp/user-profile.feature");
+  const stepsPath = path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/steps/adminapp/UserProfileSteps.java");
+  const runnerPath = path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java");
+  await mkdir(path.dirname(featurePath), { recursive: true });
+  await mkdir(path.dirname(stepsPath), { recursive: true });
+  await mkdir(path.dirname(runnerPath), { recursive: true });
+  await writeFile(featurePath, "Feature: manual feature\n", "utf8");
+  await writeFile(stepsPath, "package manual;\npublic class UserProfileSteps {}\n", "utf8");
+  await writeFile(runnerPath, renderRunner("adminapp", "AdminAppRunCucumberTest"), "utf8");
+  const before = await checksumMap([featurePath, stepsPath, runnerPath, path.join(repo, "test-suite/build.gradle")]);
+
+  const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "user-profile");
+  const plan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "user-profile",
+    taskSuffix: "AdminApp",
+    scenario: "User opens profile",
+    recording: supportedRecording
+  });
+
+  assert.deepEqual(
+    plan.conflicts.map((operation) => operation.kind).sort(),
+    ["feature", "runner", "steps"]
+  );
+  await assert.rejects(
+    () => applyScaffoldPlan(plan),
+    /Refusing to write scaffold with conflicts:[\s\S]*default onboarding never overwrites source files/
+  );
+  assert.deepEqual(await checksumMap([featurePath, stepsPath, runnerPath, path.join(repo, "test-suite/build.gradle")]), before);
+  assert.equal(existsSync(path.join(draftDir, "metadata.json")), false);
+});
+
+test("force refreshes only generated-owned feature and steps", async () => {
+  const repo = await createTempRepo();
+  const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "country");
+  const firstPlan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "country",
+    taskSuffix: "AdminApp",
+    scenario: "User selects United States",
+    recording: 'page.locator("[data-testid=\'country\']").selectOption("US");'
+  });
+  await applyScaffoldPlan(firstPlan);
+  const buildGradlePath = path.join(repo, "test-suite/build.gradle");
+  const runnerPath = path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java");
+  const beforeImmutable = await checksumMap([buildGradlePath, runnerPath]);
+
+  const secondPlan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "country",
+    taskSuffix: "AdminApp",
+    scenario: "User selects Canada",
+    recording: 'page.locator("[data-testid=\'country\']").selectOption("CA");',
+    force: true
+  });
+  assert.deepEqual(secondPlan.conflicts, []);
+  assert.equal(secondPlan.operations.find((operation) => operation.kind === "feature")?.status, "overwrite");
+  assert.equal(secondPlan.operations.find((operation) => operation.kind === "steps")?.status, "overwrite");
+  assert.equal(secondPlan.operations.find((operation) => operation.kind === "runner")?.status, "skip");
+  assert.equal(secondPlan.operations.find((operation) => operation.kind === "gradle-registration")?.status, "skip");
+
+  const result = await applyScaffoldPlan(secondPlan);
+  assert.match(result.summary, /Updated \[overwrite].*country\.feature/);
+  assert.match(result.summary, /Updated \[overwrite].*CountrySteps\.java/);
+  assert.deepEqual(await checksumMap([buildGradlePath, runnerPath]), beforeImmutable);
+
+  const feature = await readFile(path.join(repo, "test-suite/src/test/resources/features/adminapp/country.feature"), "utf8");
+  const steps = await readFile(path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/steps/adminapp/CountrySteps.java"), "utf8");
+  const metadata = JSON.parse(await readFile(path.join(draftDir, "metadata.json"), "utf8"));
+  assert.match(feature, /Scenario: User selects Canada/);
+  assert.match(steps, /selectOption\(\\"CA\\"\)/);
+  assert.ok(metadata.sourceOwnership.some((entry) => entry.kind === "feature" && entry.path.endsWith("country.feature")));
+  assert.ok(metadata.sourceOwnership.some((entry) => entry.kind === "steps" && entry.path.endsWith("CountrySteps.java")));
+});
+
+test("force refuses manually edited drafts when ownership checksums differ", async () => {
+  const repo = await createTempRepo();
+  const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "country");
+  const initialPlan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "country",
+    taskSuffix: "AdminApp",
+    scenario: "User selects United States",
+    recording: 'page.locator("[data-testid=\'country\']").selectOption("US");'
+  });
+  await applyScaffoldPlan(initialPlan);
+
+  const featurePath = path.join(repo, "test-suite/src/test/resources/features/adminapp/country.feature");
+  const manualFeature = `${await readFile(featurePath, "utf8")}\n# manual edit\n`;
+  await writeFile(featurePath, manualFeature, "utf8");
+  const before = await snapshotTree(repo);
+
+  const forcePlan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "country",
+    taskSuffix: "AdminApp",
+    scenario: "User selects Canada",
+    recording: 'page.locator("[data-testid=\'country\']").selectOption("CA");',
+    force: true
+  });
+
+  assert.equal(forcePlan.conflicts.find((operation) => operation.kind === "feature")?.status, "conflict");
+  assert.match(forcePlan.conflicts.find((operation) => operation.kind === "feature")?.reason, /checksum differs/);
+  await assert.rejects(() => applyScaffoldPlan(forcePlan), /checksum differs from generated ownership evidence/);
+  assert.deepEqual(await snapshotTree(repo), before);
+});
+
+test("partial scaffold states are reused only when safe and otherwise fail unchanged", async () => {
+  const directoryOnlyRepo = await createTempRepo();
+  await mkdir(path.join(directoryOnlyRepo, "test-suite/src/test/resources/features/adminapp"), { recursive: true });
+  await mkdir(path.join(directoryOnlyRepo, "test-suite/src/test/java/com/example/e2e/tests/steps/adminapp"), { recursive: true });
+  await mkdir(path.join(directoryOnlyRepo, "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp"), { recursive: true });
+  const directoryOnlyPlan = await planCaseScaffold({
+    repoRoot: directoryOnlyRepo,
+    draftDir: path.join(directoryOnlyRepo, "test-suite/build/case-drafts/adminapp/user-profile"),
+    area: "adminapp",
+    feature: "user-profile",
+    taskSuffix: "AdminApp",
+    scenario: "User opens profile",
+    recording: ""
+  });
+  assert.deepEqual(directoryOnlyPlan.conflicts, []);
+  await applyScaffoldPlan(directoryOnlyPlan);
+  assert.equal(existsSync(path.join(
+    directoryOnlyRepo,
+    "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java"
+  )), true);
+
+  const runnerOnlyRepo = await createTempRepo();
+  const runnerOnlyPath = path.join(runnerOnlyRepo, "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java");
+  await mkdir(path.dirname(runnerOnlyPath), { recursive: true });
+  await writeFile(runnerOnlyPath, renderRunner("adminapp", "AdminAppRunCucumberTest"), "utf8");
+  await assertUnsafePartialState(runnerOnlyRepo, /runner.*already exists/);
+
+  const gradleOnlyRepo = await createTempRepo();
+  await registerAdminArea(gradleOnlyRepo);
+  await assertUnsafePartialState(gradleOnlyRepo, /registered runner .* is missing/);
+
+  const featureOnlyRepo = await createTempRepo();
+  const featureOnlyPath = path.join(featureOnlyRepo, "test-suite/src/test/resources/features/adminapp/user-profile.feature");
+  await mkdir(path.dirname(featureOnlyPath), { recursive: true });
+  await writeFile(featureOnlyPath, "Feature: manual partial\n", "utf8");
+  await assertUnsafePartialState(featureOnlyRepo, /feature already exists/);
+
+  const mismatchedGlueRepo = await createTempRepo();
+  await registerAdminArea(mismatchedGlueRepo, {
+    mutateBuildGradle: (contents) => contents.replace(
+      /\n\s*'com\.example\.e2e\.tests\.steps\.adminapp'/,
+      ""
+    )
+  });
+  const mismatchedRunnerPath = path.join(mismatchedGlueRepo, "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java");
+  await mkdir(path.dirname(mismatchedRunnerPath), { recursive: true });
+  await writeFile(mismatchedRunnerPath, renderRunner("adminapp", "AdminAppRunCucumberTest"), "utf8");
+  await assertUnsafePartialState(mismatchedGlueRepo, /registered glue is missing com\.example\.e2e\.tests\.steps\.adminapp/);
+});
+
 test("generate CLI applies the scaffold and prints metadata-aligned output", async () => {
   const repo = await createTempRepo();
   const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "user-profile");
@@ -299,4 +513,109 @@ async function createTempRepo() {
   await writeFile(buildGradlePath, await readFile(sourceBuildGradle, "utf8"), "utf8");
   await stat(buildGradlePath);
   return tempRoot;
+}
+
+async function copyRegisteredRunner(repo, areaName, runnerClassName) {
+  const relativeRunnerPath = path.join(
+    "test-suite",
+    "src",
+    "test",
+    "java",
+    "com",
+    "example",
+    "e2e",
+    "tests",
+    "runner",
+    areaName,
+    `${runnerClassName}.java`
+  );
+  const destination = path.join(repo, relativeRunnerPath);
+  await mkdir(path.dirname(destination), { recursive: true });
+  await copyFile(path.join(repoRoot, relativeRunnerPath), destination);
+}
+
+async function registerAdminArea(repo, { mutateBuildGradle } = {}) {
+  const buildGradlePath = path.join(repo, "test-suite/build.gradle");
+  const buildGradle = await readFile(buildGradlePath, "utf8");
+  const area = createAreaConfig({
+    areaName: "adminapp",
+    taskSuffix: "AdminApp",
+    baseUrl: "https://app.example.test",
+    explorePath: "/profile",
+    testIdAttribute: "data-testid"
+  });
+  const updatedBuildGradle = renderUpdatedBuildGradle(buildGradle, "adminapp", area);
+  await writeFile(
+    buildGradlePath,
+    mutateBuildGradle ? mutateBuildGradle(updatedBuildGradle) : updatedBuildGradle,
+    "utf8"
+  );
+}
+
+async function assertUnsafePartialState(repo, expectedReason) {
+  const before = await snapshotTree(repo);
+  const plan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir: path.join(repo, "test-suite/build/case-drafts/adminapp/user-profile"),
+    area: "adminapp",
+    feature: "user-profile",
+    taskSuffix: "AdminApp",
+    scenario: "User opens profile",
+    recording: supportedRecording
+  });
+
+  assert.ok(plan.conflicts.length > 0);
+  assert.match(plan.conflicts.map((operation) => operation.reason).join("\n"), expectedReason);
+  await assert.rejects(() => applyScaffoldPlan(plan), expectedReason);
+  assert.deepEqual(await snapshotTree(repo), before);
+}
+
+async function snapshotTree(root) {
+  const files = {};
+
+  async function walk(directory) {
+    if (!existsSync(directory)) {
+      return;
+    }
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.name === ".git") {
+        continue;
+      }
+      const filePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(filePath);
+      } else if (entry.isFile()) {
+        files[normalize(path.relative(root, filePath))] = sha256(await readFile(filePath, "utf8"));
+      }
+    }
+  }
+
+  await walk(root);
+  return files;
+}
+
+async function checksumMap(filePaths) {
+  return Object.fromEntries(await Promise.all(filePaths.map(async (filePath) => [
+    normalize(filePath),
+    sha256(await readFile(filePath, "utf8"))
+  ])));
+}
+
+function initializeGitRepo(repo) {
+  const result = spawnSync("git", ["-C", repo, "init"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+}
+
+function gitStatus(repo) {
+  const result = spawnSync("git", ["-C", repo, "status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
+}
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function normalize(value) {
+  return value.split(path.sep).join("/");
 }

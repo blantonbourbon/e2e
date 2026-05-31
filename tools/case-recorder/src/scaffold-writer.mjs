@@ -12,7 +12,11 @@ export async function applyScaffoldPlan(plan, { dryRun = false } = {}) {
 
   if (plan.conflicts.length > 0) {
     const details = plan.conflicts
-      .map((operation) => `${operation.kind}: ${operation.filePath}`)
+      .map((operation) => {
+        const reason = operation.reason ? ` - ${operation.reason}` : "";
+        const guidance = operation.guidance ? ` ${operation.guidance}` : "";
+        return `${operation.kind}: ${operation.filePath}${reason}${guidance}`;
+      })
       .join("\n");
     throw new Error(`Refusing to write scaffold with conflicts:\n${details}`);
   }
@@ -21,6 +25,9 @@ export async function applyScaffoldPlan(plan, { dryRun = false } = {}) {
   const written = [];
 
   for (const operation of plan.operations) {
+    if (operation.status === "skip") {
+      continue;
+    }
     await mkdir(path.dirname(operation.filePath), { recursive: true });
     const contents = operation.kind === "metadata"
       ? `${JSON.stringify({

@@ -558,6 +558,9 @@ def generateCaseFromRecordingAction = {
     if (Boolean.parseBoolean(optionalProjectProperty('force', 'false'))) {
         toolArgs += '--force'
     }
+    if (Boolean.parseBoolean(optionalProjectProperty('dryRun', 'false'))) {
+        toolArgs += '--dry-run'
+    }
 
     exec {
         workingDir rootProject.projectDir

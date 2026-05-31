@@ -21,18 +21,25 @@ export function formatScaffoldSummary(plan, { dryRun = false } = {}) {
   } else {
     lines.push(`${dryRun ? "Would create" : "Created"} area scaffold ${plan.area.name} (${plan.area.taskName}).`);
   }
+  lines.push(`Gradle task: ${plan.area.taskName}`);
 
   for (const operation of plan.operations) {
+    const status = `[${operation.status}]`;
+    const detail = operation.reason ? ` - ${operation.reason}` : "";
+    const guidance = operation.guidance ? ` ${operation.guidance}` : "";
     if (operation.status === "conflict") {
-      lines.push(`Conflict ${operation.filePath}`);
+      lines.push(`Conflict ${status} ${operation.kind} ${operation.filePath}${detail}${guidance}`);
+    } else if (operation.status === "skip") {
+      lines.push(`${dryRun ? "Would skip" : "Skipped"} ${status} ${operation.kind} ${operation.filePath}${detail}`);
     } else if (operation.kind === "gradle-registration") {
-      lines.push(`${dryRun ? "Would update" : "Updated"} ${operation.filePath}`);
+      lines.push(`${dryRun ? "Would update" : "Updated"} ${status} ${operation.filePath}`);
     } else if (!operation.source) {
-      lines.push(`${dryRun ? "Would generate" : "Generated"} ${operation.filePath}`);
+      const verb = operation.status === "update" ? "update" : "create";
+      lines.push(`${dryRun ? `Would ${verb}` : "Generated"} ${status} ${operation.filePath}`);
     } else if (operation.status === "overwrite") {
-      lines.push(`${dryRun ? "Would update" : "Updated"} ${operation.filePath}`);
+      lines.push(`${dryRun ? "Would overwrite" : "Updated"} ${status} ${operation.filePath}`);
     } else {
-      lines.push(`${dryRun ? "Would generate" : "Generated"} ${operation.filePath}`);
+      lines.push(`${dryRun ? "Would create" : "Generated"} ${status} ${operation.filePath}`);
     }
   }
 
