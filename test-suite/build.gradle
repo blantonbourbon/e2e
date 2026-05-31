@@ -14,6 +14,10 @@ def firmNpmRegistryEnv = 'FIRM_NPM_REGISTRY'
 def npmExecutable = isWindows ? 'npm.cmd' : 'npm'
 def nodeExecutable = isWindows ? 'node.exe' : 'node'
 def caseRecorderDir = rootProject.file('tools/case-recorder')
+def cypressMigrationDir = rootProject.file('tools/cypress-migration')
+def cypressMigrationCli = cypressMigrationDir.toPath().resolve('src/cli.mjs').toFile()
+def syntheticCypressDir = rootProject.file('synthetic-cypress')
+def cypressMigrationOutputDir = rootProject.layout.buildDirectory.dir('cypress-migration')
 def forwardedSystemProperties = [
         'base.url',
         'browser',
@@ -371,6 +375,122 @@ tasks.register('caseRecorderTest') {
             commandLine(npmExecutable, 'test')
         }
     }
+}
+
+def cypressMigrationCommandLine = { String command ->
+    [
+            nodeExecutable,
+            cypressMigrationCli.absolutePath,
+            command,
+            '--source-root',
+            syntheticCypressDir.absolutePath,
+            '--output-dir',
+            cypressMigrationOutputDir.get().asFile.absolutePath,
+            '--repo-root',
+            rootProject.projectDir.absolutePath,
+            '--port',
+            '8790'
+    ]
+}
+
+tasks.register('cypressMigrationToolTest') {
+    group = 'cypress migration'
+    description = 'Runs the Cypress migration Node unit tests.'
+
+    doLast {
+        exec {
+            workingDir cypressMigrationDir
+            commandLine(npmExecutable, 'test')
+            configureNpmRegistry(delegate)
+        }
+    }
+}
+
+tasks.register('cypressMigrationInventory') {
+    group = 'cypress migration'
+    description = 'Generates synthetic Cypress migration inventory JSON/Markdown under build/cypress-migration.'
+    mustRunAfter tasks.named('cypressMigrationToolTest')
+
+    doLast {
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(cypressMigrationCommandLine('inventory'))
+        }
+    }
+}
+
+tasks.register('cypressMigrationRisk') {
+    group = 'cypress migration'
+    description = 'Generates reviewable synthetic Cypress migration risk flags under build/cypress-migration.'
+    mustRunAfter tasks.named('cypressMigrationInventory')
+
+    doLast {
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(cypressMigrationCommandLine('risk'))
+        }
+    }
+}
+
+tasks.register('cypressMigrationDraft') {
+    group = 'cypress migration'
+    description = 'Generates review-first synthetic Cypress Cucumber draft features under build/cypress-migration/draft-features.'
+    mustRunAfter tasks.named('cypressMigrationRisk')
+
+    doLast {
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(cypressMigrationCommandLine('draft'))
+        }
+    }
+}
+
+tasks.register('cypressMigrationOracle') {
+    group = 'cypress migration'
+    description = 'Runs the synthetic Cypress oracle with a transient 127.0.0.1:8790 static server and PID-owned cleanup.'
+    mustRunAfter tasks.named('cypressMigrationDraft')
+
+    doLast {
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(cypressMigrationCommandLine('oracle'))
+        }
+    }
+}
+
+tasks.register('cypressMigrationEvidence') {
+    group = 'cypress migration'
+    description = 'Writes evidence mapping synthetic Cypress catalog flows to migrationdemo Cucumber scenarios and outcomes.'
+    dependsOn tasks.named('cypressMigrationOracle'), tasks.named('testMigrationDemo')
+    mustRunAfter tasks.named('testMigrationDemo')
+
+    doLast {
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(cypressMigrationCommandLine('evidence') + [
+                    '--cypress-status',
+                    'passed',
+                    '--playwright-status',
+                    'passed'
+            ])
+        }
+    }
+}
+
+tasks.named('testMigrationDemo') {
+    mustRunAfter tasks.named('cypressMigrationOracle')
+}
+
+tasks.register('cypressMigrationCheck') {
+    group = 'verification'
+    description = 'Aggregate check for Cypress migration: tool tests, synthetic inventory/risk/draft, oracle, evidence, and testMigrationDemo.'
+    dependsOn tasks.named('cypressMigrationToolTest'),
+            tasks.named('cypressMigrationInventory'),
+            tasks.named('cypressMigrationRisk'),
+            tasks.named('cypressMigrationDraft'),
+            tasks.named('cypressMigrationOracle'),
+            tasks.named('testMigrationDemo'),
+            tasks.named('cypressMigrationEvidence')
 }
 
 tasks.register('recordCase') {

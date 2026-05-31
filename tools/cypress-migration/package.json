@@ -4,6 +4,10 @@
   "type": "module",
   "scripts": {
     "inventory": "node src/cli.mjs inventory",
+    "risk": "node src/cli.mjs risk",
+    "draft": "node src/cli.mjs draft",
+    "oracle": "node src/cli.mjs oracle",
+    "check": "node src/cli.mjs check",
     "test": "node --test test/*.test.mjs"
   },
   "bin": {
