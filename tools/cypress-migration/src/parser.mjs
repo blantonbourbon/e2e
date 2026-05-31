@@ -18,20 +18,20 @@ import {
   unique,
 } from "./utils.mjs";
 
-export async function validateMigrationInputs({ sourceRoot, outputDir }) {
-  await requireDirectory(sourceRoot, "Source root");
+export async function validateMigrationInputs({ sourceRoot, outputDir, repoRoot = null }) {
   if (outputDir != null) {
-    ensureOutputIsSafe(sourceRoot, outputDir);
+    ensureOutputIsSafe(sourceRoot, outputDir, { repoRoot });
   }
+  await requireDirectory(sourceRoot, "Source root");
 }
 
-export async function buildInventory({ sourceRoot, outputDir } = {}) {
+export async function buildInventory({ sourceRoot, outputDir, repoRoot = null } = {}) {
   if (typeof sourceRoot !== "string" || sourceRoot.trim().length === 0) {
     throw new Error("Missing required option: --source-root");
   }
 
   const resolvedSourceRoot = resolve(sourceRoot);
-  await validateMigrationInputs({ sourceRoot: resolvedSourceRoot, outputDir });
+  await validateMigrationInputs({ sourceRoot: resolvedSourceRoot, outputDir, repoRoot });
 
   const files = await listFiles(resolvedSourceRoot);
   const specFiles = files.filter((file) => isCySpec(file.path));

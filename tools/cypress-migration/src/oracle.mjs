@@ -5,7 +5,7 @@ import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { requireDirectory } from "./utils.mjs";
+import { ensureOutputIsSafe, requireDirectory } from "./utils.mjs";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const staticServerPath = join(currentDir, "static-server.mjs");
@@ -51,6 +51,7 @@ export async function isPortFree({ host = defaultHost, port = defaultPort } = {}
 export async function runSyntheticOracle({
   sourceRoot,
   outputDir,
+  repoRoot = null,
   host = defaultHost,
   port = defaultPort,
   timeoutMs = 15_000,
@@ -65,6 +66,7 @@ export async function runSyntheticOracle({
 
   const resolvedSourceRoot = resolve(sourceRoot);
   const resolvedOutputDir = resolve(outputDir);
+  ensureOutputIsSafe(resolvedSourceRoot, resolvedOutputDir, { repoRoot });
   const appRoot = join(resolvedSourceRoot, "app");
   const baseUrl = `http://${host}:${port}`;
 

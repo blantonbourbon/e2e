@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { slug, unique } from "./utils.mjs";
+import { ensureOutputIsSafe, slug, unique } from "./utils.mjs";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const migrationDemoFeaturePath = "test-suite/src/test/resources/features/migrationdemo/catalog.feature";
@@ -21,6 +21,7 @@ export async function writeEvidenceSummary(inventory, {
   }
 
   const resolvedOutputDir = resolve(outputDir);
+  ensureOutputIsSafe(sourceRoot, resolvedOutputDir, { repoRoot });
   await mkdir(resolvedOutputDir, { recursive: true });
 
   const summary = await buildEvidenceSummary(inventory, {

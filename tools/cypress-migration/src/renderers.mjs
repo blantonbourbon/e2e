@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { slug, unique } from "./utils.mjs";
+import { ensureOutputIsSafe, slug, unique } from "./utils.mjs";
 
-export async function writeMigrationArtifacts(inventory, { outputDir }) {
+export async function writeMigrationArtifacts(inventory, { outputDir, repoRoot = null }) {
+  ensureOutputIsSafe(inventory.sourceRoot, outputDir, { repoRoot });
   const resolvedOutputDir = resolve(outputDir);
   const draftDir = join(resolvedOutputDir, "draft-features");
   await mkdir(draftDir, { recursive: true });

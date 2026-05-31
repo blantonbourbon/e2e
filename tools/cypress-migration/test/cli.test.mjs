@@ -31,6 +31,9 @@ describe("Cypress migration CLI commands", () => {
     assert.match(result.stdout, /--source-root <path>/);
     assert.match(result.stdout, /--output-dir <path>/);
     assert.match(result.stdout, /--port <number>.*8790/);
+    assert.match(result.stdout, /refuses output locations inside Cypress\s+source roots/);
+    assert.match(result.stdout, /docs\/, \.windsurf\/, \.codex\//);
+    assert.match(result.stdout, /build\/cypress-migration/);
     assert.match(result.stdout, /:test-suite:cypressMigrationCheck/);
   });
 

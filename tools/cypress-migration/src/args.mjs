@@ -78,7 +78,9 @@ Generated artifacts:
   evidence-summary.md
 
 The CLI writes only under --output-dir and refuses output locations inside Cypress
-source directories such as cypress/e2e, cypress/support, and cypress/fixtures.
+source roots, committed repository source/test paths, docs/, .windsurf/, .codex/,
+and test-suite source directories. Use ignored build output such as
+build/cypress-migration.
 
 Gradle aggregate:
   ./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true`;

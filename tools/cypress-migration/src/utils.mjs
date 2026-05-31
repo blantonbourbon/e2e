@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { extname, relative, resolve, sep } from "node:path";
+import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export function toPosixPath(path) {
   return path.split(sep).join("/");
@@ -94,20 +94,92 @@ export function compactSlug(value) {
   return slug(value).replace(/-/g, "");
 }
 
-export function ensureOutputIsSafe(sourceRoot, outputDir) {
+export function ensureOutputIsSafe(sourceRoot, outputDir, { repoRoot = null } = {}) {
   const source = resolve(sourceRoot);
   const output = resolve(outputDir);
-  const relativeToSource = relative(source, output);
 
-  if (relativeToSource === "") {
-    throw new Error("Refusing to write migration output directly into the Cypress source root");
+  if (isSameOrInside(source, output) && !isSameOrInside(resolve(source, "build"), output)) {
+    const cypressSourcePath = unsafeCypressSourcePath(source, output);
+    const label = cypressSourcePath == null
+      ? "the Cypress source root"
+      : `Cypress source directory ${cypressSourcePath}`;
+    throw unsafeOutputError(label);
   }
 
-  const posix = toPosixPath(relativeToSource);
-  const unsafePrefixes = ["cypress/e2e", "cypress/support", "cypress/fixtures"];
-  if (!relativeToSource.startsWith("..") && unsafePrefixes.some((prefix) => posix === prefix || posix.startsWith(`${prefix}/`))) {
-    throw new Error(
-      "Refusing to write migration output inside Cypress source directory; choose an ignored build output directory",
-    );
+  if (repoRoot != null && String(repoRoot).trim().length > 0) {
+    const repo = resolve(repoRoot);
+    if (!isSameOrInside(repo, output)) {
+      return;
+    }
+
+    const protectedPath = protectedRepositoryPath(repo, output);
+    if (protectedPath != null) {
+      throw unsafeOutputError(`protected repository path ${protectedPath}`);
+    }
+
+    if (isIgnoredBuildOutput(repo, output)) {
+      return;
+    }
+
+    const repoRelative = toPosixPath(relative(repo, output));
+    throw unsafeOutputError(`repository path ${repoRelative || "."}`);
   }
+}
+
+function unsafeOutputError(label) {
+  return new Error(
+    `Refusing to write migration output inside ${label}; choose an ignored build output directory such as build/cypress-migration.`,
+  );
+}
+
+function unsafeCypressSourcePath(source, output) {
+  const unsafePaths = [
+    "cypress/e2e",
+    "cypress/support",
+    "cypress/fixtures",
+    "cypress",
+  ];
+
+  const match = unsafePaths.find((unsafePath) => isSameOrInside(resolve(source, unsafePath), output));
+  return match == null ? null : match;
+}
+
+function protectedRepositoryPath(repo, output) {
+  const protectedPaths = [
+    "test-suite/src/test/resources/features",
+    "test-suite/src/test/java",
+    "core/src",
+    "tools/cypress-migration/src",
+    "tools/cypress-migration/test",
+    "tools/case-recorder/src",
+    "tools/case-recorder/test",
+    "synthetic-cypress/cypress",
+    "synthetic-cypress/app",
+    ".windsurf",
+    ".codex",
+    "docs",
+  ];
+
+  const matches = protectedPaths
+    .filter((protectedPath) => isSameOrInside(resolve(repo, protectedPath), output))
+    .sort((left, right) => right.length - left.length);
+  return matches[0] ?? null;
+}
+
+function isIgnoredBuildOutput(repo, output) {
+  const relativeToRepo = relative(repo, output);
+  if (!isRelativeInside(relativeToRepo)) {
+    return false;
+  }
+
+  return toPosixPath(relativeToRepo).split("/").includes("build");
+}
+
+function isSameOrInside(parent, child) {
+  const relativePath = relative(parent, child);
+  return relativePath === "" || isRelativeInside(relativePath);
+}
+
+function isRelativeInside(relativePath) {
+  return relativePath.length > 0 && !relativePath.startsWith("..") && !isAbsolute(relativePath);
 }

@@ -8,6 +8,7 @@ import { writeEvidenceSummary } from "./evidence.mjs";
 import { runProcess, runSyntheticOracle } from "./oracle.mjs";
 import { buildInventory } from "./parser.mjs";
 import { writeMigrationArtifacts } from "./renderers.mjs";
+import { ensureOutputIsSafe } from "./utils.mjs";
 
 export async function run(argv = process.argv.slice(2), { stdout = process.stdout, stderr = process.stderr } = {}) {
   const { command, options } = parseArgs(argv);
@@ -39,11 +40,22 @@ export async function run(argv = process.argv.slice(2), { stdout = process.stdou
 }
 
 async function generateMigrationArtifacts(options) {
+  const context = resolveMigrationContext(options);
+  return generateMigrationArtifactsFromContext(context);
+}
+
+async function generateMigrationArtifactsFromContext(context) {
+  const inventory = await buildInventory(context);
+  const artifacts = await writeMigrationArtifacts(inventory, context);
+  return { ...context, inventory, artifacts };
+}
+
+function resolveMigrationContext(options) {
   const sourceRoot = requireOption(options, "source-root");
   const outputDir = requireOption(options, "output-dir");
-  const inventory = await buildInventory({ sourceRoot, outputDir });
-  const artifacts = await writeMigrationArtifacts(inventory, { outputDir });
-  return { inventory, artifacts };
+  const repoRoot = optionalPath(options, "repo-root") ?? defaultRepoRoot();
+  ensureOutputIsSafe(sourceRoot, outputDir, { repoRoot });
+  return { sourceRoot, outputDir, repoRoot };
 }
 
 function writeArtifactOutput(command, artifacts, stdout) {
@@ -72,14 +84,12 @@ function writeArtifactOutput(command, artifacts, stdout) {
 }
 
 async function runOracleCommand(options, stdout) {
-  const { inventory, artifacts } = await generateMigrationArtifacts(options);
-  const outputDir = requireOption(options, "output-dir");
-  const sourceRoot = requireOption(options, "source-root");
+  const { inventory, artifacts, outputDir, sourceRoot, repoRoot } = await generateMigrationArtifacts(options);
   const port = optionalPort(options);
-  const oracle = await runSyntheticOracle({ sourceRoot, outputDir, port });
+  const oracle = await runSyntheticOracle({ sourceRoot, outputDir, repoRoot, port });
   const evidence = await writeEvidenceSummary(inventory, {
     outputDir,
-    repoRoot: optionalPath(options, "repo-root") ?? defaultRepoRoot(),
+    repoRoot,
     sourceRoot,
     cypressStatus: oracle.status,
     playwrightStatus: optionalStatus(options, "playwright-status", "not-run"),
@@ -95,12 +105,11 @@ async function runOracleCommand(options, stdout) {
 }
 
 async function runEvidenceCommand(options, stdout) {
-  const { inventory } = await generateMigrationArtifacts(options);
-  const outputDir = requireOption(options, "output-dir");
+  const { inventory, outputDir, repoRoot, sourceRoot } = await generateMigrationArtifacts(options);
   const evidence = await writeEvidenceSummary(inventory, {
     outputDir,
-    repoRoot: optionalPath(options, "repo-root") ?? defaultRepoRoot(),
-    sourceRoot: requireOption(options, "source-root"),
+    repoRoot,
+    sourceRoot,
     cypressStatus: optionalStatus(options, "cypress-status", "not-run"),
     playwrightStatus: optionalStatus(options, "playwright-status", "not-run"),
     oracleEvidencePath: join(resolve(outputDir), "oracle-result.json"),
@@ -112,9 +121,8 @@ async function runEvidenceCommand(options, stdout) {
 }
 
 async function runCheckCommand(options, stdout, stderr) {
-  const sourceRoot = requireOption(options, "source-root");
-  const outputDir = requireOption(options, "output-dir");
-  const repoRoot = optionalPath(options, "repo-root") ?? defaultRepoRoot();
+  const context = resolveMigrationContext(options);
+  const { sourceRoot, outputDir, repoRoot } = context;
   const toolRoot = resolve(join(dirname(fileURLToPath(import.meta.url)), ".."));
   const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
   const gradlew = process.platform === "win32" ? "gradlew.bat" : "./gradlew";
@@ -127,14 +135,14 @@ async function runCheckCommand(options, stdout, stderr) {
     return toolTest.exitCode;
   }
 
-  const { inventory, artifacts } = await generateMigrationArtifacts(options);
+  const { inventory, artifacts } = await generateMigrationArtifactsFromContext(context);
   stdout.write(`Wrote Cypress migration inventory to ${artifacts.inventoryJson}\n`);
   stdout.write(`Wrote Cypress migration risk flags to ${artifacts.riskMarkdown}\n`);
   for (const draft of artifacts.draftFeatures) {
     stdout.write(`Wrote Cypress migration draft feature to ${draft.path}\n`);
   }
 
-  const oracle = await runSyntheticOracle({ sourceRoot, outputDir, port: optionalPort(options) });
+  const oracle = await runSyntheticOracle({ sourceRoot, outputDir, repoRoot, port: optionalPort(options) });
   stdout.write(`Ran synthetic Cypress oracle on ${oracle.baseUrl} with status ${oracle.status}\n`);
   if (oracle.exitCode !== 0) {
     await writeEvidenceSummary(inventory, {
