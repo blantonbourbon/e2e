@@ -1,0 +1,12 @@
+{
+  "name": "e2e-case-recorder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "record": "node src/record.mjs",
+    "generate": "node src/generate.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

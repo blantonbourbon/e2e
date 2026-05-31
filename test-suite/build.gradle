@@ -9,8 +9,11 @@ def allureVersion = rootProject.ext.allureVersion
 def isWindows = System.getProperty('os.name', '').toLowerCase().contains('win')
 def fullSuiteRunnerClassName = 'com.example.e2e.tests.runner.RunCucumberTest'
 def playwrightCliVersion = '0.1.12'
+def nodePlaywrightVersion = '1.52.0'
 def firmNpmRegistryEnv = 'FIRM_NPM_REGISTRY'
 def npmExecutable = isWindows ? 'npm.cmd' : 'npm'
+def nodeExecutable = isWindows ? 'node.exe' : 'node'
+def caseRecorderDir = rootProject.file('tools/case-recorder')
 def forwardedSystemProperties = [
         'base.url',
         'browser',
@@ -168,10 +171,41 @@ def resolveExploreUrl = { String baseUrl, String path ->
     if (path == null || path.isBlank() || path == '/') {
         return baseUrl
     }
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path
+    }
 
     String normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl
     String normalizedPath = path.startsWith('/') ? path : "/${path}"
     "${normalizedBaseUrl}${normalizedPath}"
+}
+
+def requireProjectProperty = { String propertyName ->
+    def propertyValue = project.findProperty(propertyName)?.toString()
+    if (propertyValue == null || propertyValue.isBlank()) {
+        throw new GradleException("Missing required project property: -P${propertyName}=...")
+    }
+    propertyValue
+}
+
+def optionalProjectProperty = { String propertyName, String defaultValue = null ->
+    def propertyValue = project.findProperty(propertyName)?.toString()
+    propertyValue == null || propertyValue.isBlank() ? defaultValue : propertyValue
+}
+
+def requireCucumberArea = { String areaName ->
+    def areaConfig = cucumberAreas[areaName]
+    if (areaConfig == null) {
+        throw new GradleException("Unknown area '${areaName}'. Known areas: ${cucumberAreas.keySet().join(', ')}")
+    }
+    areaConfig
+}
+
+def configureNpmRegistry = { ExecSpec execSpec ->
+    String registry = System.getenv(firmNpmRegistryEnv)
+    if (registry != null && !registry.isBlank()) {
+        execSpec.environment 'NPM_CONFIG_REGISTRY', registry
+    }
 }
 
 def writePlaywrightCliConfig = { String areaName, Map<String, ?> areaConfig ->
@@ -296,6 +330,91 @@ tasks.register('showExploreSessions') {
         String registry = requirePlaywrightCliExploreSupport()
         runPlaywrightCli(['show'], registry)
     }
+}
+
+tasks.register('recordCase') {
+    group = 'case onboarding'
+    description = 'Records browser actions into a Java Playwright draft under test-suite/build/case-drafts.'
+
+    doLast {
+        String areaName = requireProjectProperty('area')
+        Map<String, ?> areaConfig = requireCucumberArea(areaName)
+        String featureName = requireProjectProperty('feature')
+        String scenarioName = optionalProjectProperty('scenario', featureName)
+        String path = optionalProjectProperty('path', areaConfig.explore?.path ?: '/')
+        String baseUrl = System.getProperty('base.url') ?: areaConfig.baseUrl
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new GradleException("Area '${areaName}' has no baseUrl. Pass one with -Dbase.url=...")
+        }
+
+        File draftDir = layout.buildDirectory.dir("case-drafts/${areaName}/${featureName}").get().asFile
+        List<String> toolArgs = [
+                caseRecorderDir.toPath().resolve('src/record.mjs').toFile().absolutePath,
+                '--area', areaName,
+                '--feature', featureName,
+                '--scenario', scenarioName,
+                '--path', path,
+                '--url', resolveExploreUrl(baseUrl, path),
+                '--draft-dir', draftDir.absolutePath,
+                '--playwright-version', nodePlaywrightVersion,
+                '--test-id-attribute', areaConfig.explore?.testIdAttribute ?: 'data-testid'
+        ]
+
+        if (Boolean.parseBoolean(optionalProjectProperty('force', 'false'))) {
+            toolArgs += '--force'
+        }
+
+        exec {
+            workingDir rootProject.projectDir
+            commandLine([nodeExecutable] + toolArgs)
+            configureNpmRegistry(delegate)
+        }
+    }
+}
+
+def generateCaseFromRecordingAction = {
+    String areaName = requireProjectProperty('area')
+    Map<String, ?> areaConfig = requireCucumberArea(areaName)
+    String featureName = requireProjectProperty('feature')
+    String scenarioName = optionalProjectProperty('scenario')
+    String baseUrl = System.getProperty('base.url') ?: areaConfig.baseUrl
+    File draftDir = layout.buildDirectory.dir("case-drafts/${areaName}/${featureName}").get().asFile
+    List<String> toolArgs = [
+            caseRecorderDir.toPath().resolve('src/generate.mjs').toFile().absolutePath,
+            '--repo-root', rootProject.projectDir.absolutePath,
+            '--area', areaName,
+            '--feature', featureName,
+            '--draft-dir', draftDir.absolutePath
+    ]
+
+    if (scenarioName != null) {
+        toolArgs += ['--scenario', scenarioName]
+    }
+    if (baseUrl != null && !baseUrl.isBlank()) {
+        toolArgs += ['--base-url', baseUrl]
+    }
+    if (Boolean.parseBoolean(optionalProjectProperty('force', 'false'))) {
+        toolArgs += '--force'
+    }
+
+    exec {
+        workingDir rootProject.projectDir
+        commandLine([nodeExecutable] + toolArgs)
+    }
+}
+
+tasks.register('generateCaseFromRecording') {
+    group = 'case onboarding'
+    description = 'Generates feature and step-definition drafts from a recorded case.'
+
+    doLast(generateCaseFromRecordingAction)
+}
+
+tasks.register('generateCase') {
+    group = 'case onboarding'
+    description = 'Alias for generateCaseFromRecording.'
+
+    doLast(generateCaseFromRecordingAction)
 }
 
 tasks.register('testAllApps') {

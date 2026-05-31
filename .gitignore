@@ -4,3 +4,4 @@ build/
 out/
 gradle/wrapper/*.jar
 .gradle-user/
+tools/case-recorder/node_modules/
