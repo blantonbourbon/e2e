@@ -4,6 +4,8 @@
 
 假设你要新增的 app 名称是 `adminapp`。
 
+`area` 名称会同时用作 feature 目录、step package 和 Gradle key，因此必须是 Java package 片段：小写字母开头，只包含小写字母和数字，例如 `adminapp`，不要用 `admin-app`。
+
 ## 1. 建目录
 
 新增 feature 目录：
@@ -71,7 +73,7 @@ public class AdminAppRunCucumberTest {
 
 ## 5. 在 Gradle 注册新的 area task
 
-编辑 [test-suite/build.gradle](/home/kratos/projects/e2e/test-suite/build.gradle)，在 `cucumberAreas` 中新增一项：
+编辑 [test-suite/build.gradle](../test-suite/build.gradle)，在 `cucumberAreas` 中新增一项：
 
 ```groovy
 adminapp: [
@@ -155,7 +157,47 @@ Windows 下默认开启本地浏览器模式：
   -Dbrowser=firefox
 ```
 
-## 8. 验证清单
+## 8. 可选：录制并生成新用例草稿
+
+如果新 area 已经在 `cucumberAreas` 注册，并且 `glue` 包含 `com.example.e2e.tests.steps.common`，可以先用 recorder 操作浏览器，再生成 Cucumber 草稿：
+
+```bash
+./gradlew :test-suite:recordCase \
+  -Parea=adminapp \
+  -Pfeature=user-profile \
+  -Pscenario="User can open the profile page" \
+  -Ppath=/profile
+```
+
+关闭 Playwright codegen 窗口后，原始录制文件会保存到：
+
+```text
+test-suite/build/case-drafts/adminapp/user-profile/
+```
+
+然后生成 feature 和 step draft：
+
+```bash
+./gradlew :test-suite:generateCaseFromRecording \
+  -Parea=adminapp \
+  -Pfeature=user-profile
+```
+
+生成结果：
+
+```text
+test-suite/src/test/resources/features/adminapp/user-profile.feature
+test-suite/src/test/java/com/example/e2e/tests/steps/adminapp/UserProfileSteps.java
+```
+
+落地规则：
+
+- 生成的 feature 会带 `@draft`，合并前需要改成稳定业务语言。
+- 简单点击、输入、可见性断言会复用 `steps/common/DraftInteractionSteps.java`。
+- 不支持的录制动作会生成明确失败的 step，必须人工改成 app 专属 step 或 interaction。
+- 默认不覆盖已有文件；确认要重生成时再传 `-Pforce=true`。
+
+## 9. 验证清单
 
 新增一个 app 后，至少验证这些点：
 
@@ -165,7 +207,7 @@ Windows 下默认开启本地浏览器模式：
 4. `test-suite/build/artifacts/<app-name>/` 下能看到 trace / video 产物。
 5. 如果要开并行，先确认没有共享账号、共享测试数据和共享文件路径冲突。
 
-## 9. 不要做的事
+## 10. 不要做的事
 
 - 不要把新 app 的步骤直接塞进 `steps/common/`。
 - 不要复用别的 app runner 去跑新的 feature 目录。

@@ -1,5 +1,6 @@
 .gradle/
 build/
+tools/case-recorder/node_modules/
 */build/
 out/
 gradle/wrapper/*.jar
