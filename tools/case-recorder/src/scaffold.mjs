@@ -20,8 +20,10 @@ import {
   validateSlug
 } from "./names.mjs";
 import { renderRunner } from "./scaffold-render.mjs";
+import { resolveCaseTarget as resolveCaseTargetUrl } from "./url-resolution.mjs";
 export { formatScaffoldSummary } from "./scaffold-render.mjs";
 export { applyScaffoldPlan } from "./scaffold-writer.mjs";
+export { resolveCaseTarget } from "./url-resolution.mjs";
 
 const DEFAULT_BASE_URL = "https://playwright.dev";
 const DEFAULT_TEST_ID_ATTRIBUTE = "data-testid";
@@ -43,9 +45,9 @@ export async function planCaseScaffold(options) {
   validateSlug(featureName, "feature");
   validateTaskSuffix(taskSuffix);
 
-  const target = resolveCaseTarget({
+  const target = resolveCaseTargetUrl({
     baseUrl: textOr(options.baseUrl, DEFAULT_BASE_URL),
-    path: textOr(options.path, "/")
+    path: pathOr(options.path, "/")
   });
   const stepClassName = `${toPascalCase(featureName)}Steps`;
   const buildGradlePath = path.join(repoRoot, "test-suite", "build.gradle");
@@ -218,30 +220,6 @@ export async function planCaseScaffold(options) {
   };
 }
 
-export function resolveCaseTarget({ baseUrl = DEFAULT_BASE_URL, path: requestedPath = "/" } = {}) {
-  const normalizedBaseUrl = requiredText(baseUrl, "baseUrl");
-  const rawPath = textOr(requestedPath, "/");
-
-  if (/^https?:\/\//i.test(rawPath)) {
-    return {
-      baseUrl: normalizedBaseUrl,
-      path: rawPath,
-      navigationTarget: rawPath,
-      resolvedUrl: rawPath
-    };
-  }
-
-  const navigationTarget = rawPath === "/" ? "/" : (rawPath.startsWith("/") ? rawPath : `/${rawPath}`);
-  return {
-    baseUrl: normalizedBaseUrl,
-    path: navigationTarget,
-    navigationTarget,
-    resolvedUrl: navigationTarget === "/"
-      ? normalizedBaseUrl
-      : `${normalizedBaseUrl.replace(/\/$/, "")}${navigationTarget}`
-  };
-}
-
 function createSourcePaths(repoRoot, areaName, featureName, stepClassName, runnerFqn) {
   return {
     featurePath: path.join(
@@ -384,8 +362,10 @@ async function validateExistingRunner({ repoRoot, areaName, area, runnerPath }) 
   if (!contents.includes(`public class ${area.runnerClassName}`)) {
     runnerConflicts.push(`runner class must be '${area.runnerClassName}'`);
   }
-  if (!contents.includes(`@SelectClasspathResource("features/${areaName}")`)) {
-    runnerConflicts.push(`runner must select only features/${areaName}`);
+  const selectors = selectClasspathResources(contents);
+  if (selectors.length !== 1 || selectors[0] !== `features/${areaName}`) {
+    const found = selectors.length > 0 ? selectors.join(", ") : "none";
+    runnerConflicts.push(`runner must select exactly features/${areaName}; found: ${found}`);
   }
 
   return runnerConflicts.length > 0
@@ -566,4 +546,93 @@ function textOr(value, fallback = undefined) {
     return fallback;
   }
   return value.trim();
+}
+
+function pathOr(value, fallback = undefined) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  return value.trim();
+}
+
+function selectClasspathResources(contents) {
+  const uncommentedContents = stripJavaComments(contents);
+  const selectors = Array.from(
+    uncommentedContents.matchAll(/@SelectClasspathResource\s*\(\s*"([^"]+)"\s*\)/g),
+    (match) => match[1]
+  );
+
+  if (/@SelectClasspathResources\b/.test(uncommentedContents)) {
+    selectors.push("@SelectClasspathResources");
+  }
+
+  return selectors;
+}
+
+function stripJavaComments(contents) {
+  let output = "";
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inString = false;
+  let inChar = false;
+  let escaping = false;
+
+  for (let index = 0; index < contents.length; index += 1) {
+    const char = contents[index];
+    const next = contents[index + 1];
+
+    if (inLineComment) {
+      if (char === "\n" || char === "\r") {
+        inLineComment = false;
+        output += char;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (char === "*" && next === "/") {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (!inString && !inChar && char === "/" && next === "/") {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (!inString && !inChar && char === "/" && next === "*") {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+
+    output += char;
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if ((inString || inChar) && char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (!inChar && char === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString && char === "'") {
+      inChar = !inChar;
+    }
+  }
+
+  return output;
 }

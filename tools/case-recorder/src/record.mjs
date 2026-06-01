@@ -13,6 +13,7 @@ async function main() {
   const url = requireOption(options, "url");
   const draftDir = requireOption(options, "draft-dir");
   const playwrightVersion = optionalOption(options, "playwright-version", "1.52.0");
+  const baseUrl = optionalOption(options, "base-url");
   const relativePath = optionalOption(options, "path", "/");
   const testIdAttribute = optionalOption(options, "test-id-attribute");
   const force = booleanOption(options, "force");
@@ -32,7 +33,9 @@ async function main() {
     area,
     feature,
     scenario,
+    ...(baseUrl ? { baseUrl } : {}),
     url,
+    resolvedUrl: url,
     path: relativePath,
     recording: "recording.java",
     createdAt: new Date().toISOString()

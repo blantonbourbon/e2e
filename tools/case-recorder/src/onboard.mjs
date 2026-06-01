@@ -54,7 +54,7 @@ export async function runOnboardCase(input, dependencies = {}) {
   const area = requiredText(input.area, "area");
   const feature = requiredText(input.feature, "feature");
   const scenario = textOr(input.scenario);
-  const requestedPath = textOr(input.path, "/");
+  const requestedPath = pathOr(input.path, "/");
   const baseUrl = textOr(input.baseUrl, DEFAULT_BASE_URL);
   const draftDir = path.resolve(textOr(
     input.draftDir,
@@ -285,6 +285,16 @@ function requiredText(value, label) {
 
 function textOr(value, fallback = undefined) {
   if (typeof value !== "string" || value.trim().length === 0) {
+    return fallback;
+  }
+  return value.trim();
+}
+
+function pathOr(value, fallback = undefined) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value !== "string") {
     return fallback;
   }
   return value.trim();

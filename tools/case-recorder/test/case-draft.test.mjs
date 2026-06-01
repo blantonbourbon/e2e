@@ -27,6 +27,66 @@ test("generates a draft from navigation and title assertions", () => {
   assert.match(draft.files.summary, /Supported actions: 2/);
 });
 
+test("keeps recorded navigation aligned with a path-prefixed base URL target", () => {
+  const recording = `
+    page.navigate("https://app.example.test/root/profile?tab=settings");
+  `;
+
+  const draft = generateCaseDraft(recording, {
+    area: "demoapp",
+    feature: "profile-settings",
+    scenario: "Visitor opens profile settings",
+    baseUrl: "https://app.example.test/root/",
+    path: "profile?tab=settings",
+    resolvedUrl: "https://app.example.test/root/profile?tab=settings"
+  });
+
+  assert.deepEqual(draft.steps, [
+    'Given the user opens the relative path "profile?tab=settings"'
+  ]);
+  assert.equal(JSON.parse(draft.files.draftPack).resolvedUrl, "https://app.example.test/root/profile?tab=settings");
+  assert.match(draft.files.summary, /Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+});
+
+test("preserves same-origin absolute URL navigation inputs unchanged", () => {
+  const recording = `
+    page.navigate("https://app.example.test/root/profile?tab=settings");
+  `;
+
+  const draft = generateCaseDraft(recording, {
+    area: "demoapp",
+    feature: "absolute-profile",
+    scenario: "Visitor opens profile settings",
+    baseUrl: "https://app.example.test/root/",
+    path: "https://app.example.test/root/profile?tab=settings",
+    resolvedUrl: "https://app.example.test/root/profile?tab=settings"
+  });
+
+  assert.deepEqual(draft.steps, [
+    'Given the user opens the relative path "https://app.example.test/root/profile?tab=settings"'
+  ]);
+  assert.match(draft.files.feature, /https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+});
+
+test("keeps leading slash navigation rooted at the origin", () => {
+  const recording = `
+    page.navigate("https://app.example.test/profile?tab=settings");
+  `;
+
+  const draft = generateCaseDraft(recording, {
+    area: "demoapp",
+    feature: "root-profile",
+    scenario: "Visitor opens origin-root profile",
+    baseUrl: "https://app.example.test/root/",
+    path: "/profile?tab=settings",
+    resolvedUrl: "https://app.example.test/profile?tab=settings"
+  });
+
+  assert.deepEqual(draft.steps, [
+    'Given the user opens the relative path "/profile?tab=settings"'
+  ]);
+});
+
 test("keeps unsupported recorded actions explicit and reviewable", () => {
   const recording = `
     page.locator("[data-testid='country']").selectOption("US");

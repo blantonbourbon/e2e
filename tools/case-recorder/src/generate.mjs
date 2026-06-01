@@ -75,11 +75,25 @@ function inferBaseUrl(url, requestedPath) {
 
   try {
     const parsedUrl = new URL(url);
-    const normalizedPath = typeof requestedPath === "string" && requestedPath.startsWith("/")
-      ? requestedPath
-      : null;
-    if (normalizedPath && `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}` === normalizedPath) {
+    const normalizedPath = typeof requestedPath === "string" ? requestedPath.trim() : "";
+    if (/^https?:\/\//i.test(normalizedPath)) {
       return parsedUrl.origin;
+    }
+    if (normalizedPath.length === 0) {
+      return parsedUrl.href;
+    }
+    if (normalizedPath.startsWith("/") && `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}` === normalizedPath) {
+      return parsedUrl.origin;
+    }
+    if (!normalizedPath.startsWith("/")) {
+      const relativePathname = normalizedPath.split(/[?#]/, 1)[0];
+      if (relativePathname.length > 0 && parsedUrl.pathname.endsWith(relativePathname)) {
+        const basePathname = parsedUrl.pathname.slice(0, parsedUrl.pathname.length - relativePathname.length);
+        return `${parsedUrl.origin}${basePathname || "/"}`;
+      }
+      if (normalizedPath.startsWith("?") || normalizedPath.startsWith("#")) {
+        return `${parsedUrl.origin}${parsedUrl.pathname}`;
+      }
     }
     return `${parsedUrl.protocol}//${parsedUrl.host}`;
   } catch {

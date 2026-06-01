@@ -153,6 +153,83 @@ test("reuses an existing registered area without duplicate runner or Gradle entr
   );
 });
 
+test("rejects existing registered runners with extra classpath resource selectors", async () => {
+  const repo = await createTempRepo();
+  await registerAdminArea(repo);
+  const runnerPath = path.join(
+    repo,
+    "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java"
+  );
+  await mkdir(path.dirname(runnerPath), { recursive: true });
+  await writeFile(runnerPath, `package com.example.e2e.tests.runner.adminapp;
+
+import org.junit.platform.suite.api.IncludeEngines;
+import org.junit.platform.suite.api.SelectClasspathResource;
+import org.junit.platform.suite.api.Suite;
+
+@Suite
+@IncludeEngines("cucumber")
+@SelectClasspathResource("features/adminapp")
+@SelectClasspathResource("features/common")
+public class AdminAppRunCucumberTest {
+}
+`, "utf8");
+  const before = await snapshotTree(repo);
+
+  const plan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir: path.join(repo, "test-suite/build/case-drafts/adminapp/user-profile"),
+    area: "adminapp",
+    feature: "user-profile",
+    scenario: "User opens profile",
+    recording: supportedRecording
+  });
+
+  assert.equal(plan.conflicts.find((operation) => operation.kind === "runner")?.status, "conflict");
+  assert.match(
+    plan.conflicts.find((operation) => operation.kind === "runner")?.reason,
+    /runner must select exactly features\/adminapp/
+  );
+  await assert.rejects(() => applyScaffoldPlan(plan), /features\/common/);
+  assert.deepEqual(await snapshotTree(repo), before);
+});
+
+test("rejects existing runners whose classpath selector only appears in comments", async () => {
+  const repo = await createTempRepo();
+  await registerAdminArea(repo);
+  const runnerPath = path.join(
+    repo,
+    "test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java"
+  );
+  await mkdir(path.dirname(runnerPath), { recursive: true });
+  await writeFile(runnerPath, `package com.example.e2e.tests.runner.adminapp;
+
+import org.junit.platform.suite.api.IncludeEngines;
+import org.junit.platform.suite.api.Suite;
+
+@Suite
+@IncludeEngines("cucumber")
+// @SelectClasspathResource("features/adminapp")
+public class AdminAppRunCucumberTest {
+}
+`, "utf8");
+
+  const plan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir: path.join(repo, "test-suite/build/case-drafts/adminapp/user-profile"),
+    area: "adminapp",
+    feature: "user-profile",
+    scenario: "User opens profile",
+    recording: supportedRecording
+  });
+
+  assert.equal(plan.conflicts.find((operation) => operation.kind === "runner")?.status, "conflict");
+  assert.match(
+    plan.conflicts.find((operation) => operation.kind === "runner")?.reason,
+    /runner must select exactly features\/adminapp/
+  );
+});
+
 test("validates deterministic names before planning writes", async () => {
   const repo = await createTempRepo();
   const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "user-profile");
@@ -214,9 +291,39 @@ test("resolves base URL and path consistently for relative and absolute targets"
     path: "profile?tab=settings"
   }), {
     baseUrl: "https://app.example.test/root/",
+    path: "profile?tab=settings",
+    navigationTarget: "profile?tab=settings",
+    resolvedUrl: "https://app.example.test/root/profile?tab=settings"
+  });
+
+  assert.deepEqual(resolveCaseTarget({
+    baseUrl: "https://app.example.test/root/",
+    path: "/profile?tab=settings"
+  }), {
+    baseUrl: "https://app.example.test/root/",
     path: "/profile?tab=settings",
     navigationTarget: "/profile?tab=settings",
-    resolvedUrl: "https://app.example.test/root/profile?tab=settings"
+    resolvedUrl: "https://app.example.test/profile?tab=settings"
+  });
+
+  assert.deepEqual(resolveCaseTarget({
+    baseUrl: "https://app.example.test/root/",
+    path: "/"
+  }), {
+    baseUrl: "https://app.example.test/root/",
+    path: "/",
+    navigationTarget: "/",
+    resolvedUrl: "https://app.example.test/"
+  });
+
+  assert.deepEqual(resolveCaseTarget({
+    baseUrl: "https://app.example.test/root/",
+    path: ""
+  }), {
+    baseUrl: "https://app.example.test/root/",
+    path: "",
+    navigationTarget: "",
+    resolvedUrl: "https://app.example.test/root/"
   });
 
   assert.deepEqual(resolveCaseTarget({
@@ -228,6 +335,101 @@ test("resolves base URL and path consistently for relative and absolute targets"
     navigationTarget: "https://other.example.test/deep/link",
     resolvedUrl: "https://other.example.test/deep/link"
   });
+});
+
+test("aligns metadata summaries and generated steps with path-prefixed base URLs", async () => {
+  const repo = await createTempRepo();
+  const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "profile-settings");
+  const recording = `
+    page.navigate("https://app.example.test/root/profile?tab=settings");
+    assertThat(page).hasTitle(Pattern.compile(".*Profile.*"));
+  `;
+
+  const plan = await planCaseScaffold({
+    repoRoot: repo,
+    draftDir,
+    area: "adminapp",
+    feature: "profile-settings",
+    scenario: "User opens profile settings",
+    baseUrl: "https://app.example.test/root/",
+    path: "profile?tab=settings",
+    taskSuffix: "AdminApp",
+    recording
+  });
+
+  assert.equal(plan.target.navigationTarget, "profile?tab=settings");
+  assert.equal(plan.target.resolvedUrl, "https://app.example.test/root/profile?tab=settings");
+
+  const result = await applyScaffoldPlan(plan);
+  assert.match(result.summary, /Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+
+  const feature = await readFile(path.join(
+    repo,
+    "test-suite/src/test/resources/features/adminapp/profile-settings.feature"
+  ), "utf8");
+  assert.match(feature, /Given the user opens the relative path "profile\?tab=settings"/);
+
+  const metadata = JSON.parse(await readFile(path.join(draftDir, "metadata.json"), "utf8"));
+  const draft = JSON.parse(await readFile(path.join(draftDir, "case-draft.json"), "utf8"));
+  const summary = await readFile(path.join(draftDir, "draft-summary.md"), "utf8");
+  assert.equal(metadata.path, "profile?tab=settings");
+  assert.equal(metadata.resolvedUrl, "https://app.example.test/root/profile?tab=settings");
+  assert.deepEqual(draft.steps, metadata.steps);
+  assert.ok(metadata.steps.includes('Given the user opens the relative path "profile?tab=settings"'));
+  assert.match(summary, /- Path: profile\?tab=settings/);
+  assert.match(summary, /- Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+  assert.match(metadata.terminalSummary, /Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+});
+
+test("plans absolute leading-slash root and empty targets consistently with path-prefixed base URLs", async () => {
+  const cases = [
+    {
+      feature: "absolute-target",
+      path: "https://other.example.test/profile?tab=settings",
+      resolvedUrl: "https://other.example.test/profile?tab=settings",
+      step: 'Given the user opens the relative path "https://other.example.test/profile?tab=settings"'
+    },
+    {
+      feature: "leading-slash-target",
+      path: "/profile?tab=settings",
+      resolvedUrl: "https://app.example.test/profile?tab=settings",
+      step: 'Given the user opens the relative path "/profile?tab=settings"'
+    },
+    {
+      feature: "root-target",
+      path: "/",
+      resolvedUrl: "https://app.example.test/",
+      step: 'Given the user opens the relative path "/"'
+    },
+    {
+      feature: "empty-target",
+      path: "",
+      resolvedUrl: "https://app.example.test/root/",
+      step: 'Given the user opens the relative path ""'
+    }
+  ];
+
+  for (const caseData of cases) {
+    const repo = await createTempRepo();
+    const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", caseData.feature);
+    const plan = await planCaseScaffold({
+      repoRoot: repo,
+      draftDir,
+      area: "adminapp",
+      feature: caseData.feature,
+      scenario: `User opens ${caseData.feature}`,
+      baseUrl: "https://app.example.test/root/",
+      path: caseData.path,
+      taskSuffix: "AdminApp",
+      recording: ""
+    });
+
+    assert.equal(plan.metadata.path, caseData.path);
+    assert.equal(plan.metadata.resolvedUrl, caseData.resolvedUrl);
+    assert.equal(plan.draft.resolvedUrl, caseData.resolvedUrl);
+    assert.deepEqual(plan.metadata.steps, [caseData.step]);
+    assert.match(plan.operations.find((operation) => operation.kind === "draft-summary").contents, new RegExp(escapeRegExp(caseData.resolvedUrl)));
+  }
 });
 
 test("refuses source conflicts before writing any scaffold files", async () => {
@@ -506,6 +708,47 @@ test("generate CLI applies the scaffold and prints metadata-aligned output", asy
   assert.equal(metadata.terminalSummary, result.stdout.trim());
 });
 
+test("generate CLI infers path-prefixed base URLs from legacy relative-path metadata", async () => {
+  const repo = await createTempRepo();
+  const draftDir = path.join(repo, "test-suite", "build", "case-drafts", "adminapp", "profile-settings");
+  await mkdir(draftDir, { recursive: true });
+  await writeFile(path.join(draftDir, "recording.java"), `
+    page.navigate("https://app.example.test/root/profile?tab=settings");
+    assertThat(page).hasTitle(Pattern.compile(".*Profile.*"));
+  `, "utf8");
+  await writeFile(path.join(draftDir, "metadata.json"), `${JSON.stringify({
+    area: "adminapp",
+    feature: "profile-settings",
+    scenario: "User updates profile from legacy metadata",
+    url: "https://app.example.test/root/profile?tab=settings",
+    path: "profile?tab=settings",
+    recording: "recording.java"
+  }, null, 2)}\n`, "utf8");
+
+  const result = spawnSync(process.execPath, [
+    path.join(repoRoot, "tools/case-recorder/src/generate.mjs"),
+    "--repo-root", repo,
+    "--area", "adminapp",
+    "--feature", "profile-settings",
+    "--task-suffix", "AdminApp",
+    "--draft-dir", draftDir
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+
+  const feature = await readFile(path.join(
+    repo,
+    "test-suite/src/test/resources/features/adminapp/profile-settings.feature"
+  ), "utf8");
+  assert.match(feature, /Given the user opens the relative path "profile\?tab=settings"/);
+
+  const metadata = JSON.parse(await readFile(path.join(draftDir, "metadata.json"), "utf8"));
+  assert.equal(metadata.baseUrl, "https://app.example.test/root/");
+  assert.equal(metadata.path, "profile?tab=settings");
+  assert.equal(metadata.resolvedUrl, "https://app.example.test/root/profile?tab=settings");
+});
+
 async function createTempRepo() {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "case-recorder-scaffold-"));
   const buildGradlePath = path.join(tempRoot, "test-suite", "build.gradle");
@@ -618,4 +861,8 @@ function sha256(value) {
 
 function normalize(value) {
   return value.split(path.sep).join("/");
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

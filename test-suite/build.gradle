@@ -173,17 +173,24 @@ def runPlaywrightCli = { List<String> args, String registry, boolean ignoreFailu
 }
 
 def resolveExploreUrl = { String baseUrl, String path ->
-    if (path == null || path.isBlank() || path == '/') {
-        return baseUrl
+    if (baseUrl == null || baseUrl.isBlank()) {
+        throw new GradleException('base.url must not be blank when resolving recorder/explore navigation.')
     }
 
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-        return path
+    String navigationTarget = path == null ? '/' : path.trim()
+    if (navigationTarget.toLowerCase().startsWith('http://') ||
+            navigationTarget.toLowerCase().startsWith('https://')) {
+        return navigationTarget
     }
 
-    String normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl
-    String normalizedPath = path.startsWith('/') ? path : "/${path}"
-    "${normalizedBaseUrl}${normalizedPath}"
+    try {
+        return java.net.URI.create(baseUrl.trim()).resolve(navigationTarget).toString()
+    } catch (Exception exception) {
+        throw new GradleException(
+                "Unable to resolve path '${navigationTarget}' against base URL '${baseUrl}': ${exception.message}",
+                exception
+        )
+    }
 }
 
 def caseRecorderProjectProperty = { String propertyName ->
@@ -543,6 +550,7 @@ tasks.register('recordCase') {
                 '--feature', featureName,
                 '--scenario', scenarioName,
                 '--path', path,
+                '--base-url', baseUrl,
                 '--url', resolveExploreUrl(baseUrl, path),
                 '--draft-dir', draftDir.absolutePath,
                 '--playwright-version', nodePlaywrightVersion,

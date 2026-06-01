@@ -19,6 +19,10 @@ const supportedRecording = `
   page.navigate("https://playwright.dev/docs/intro");
   assertThat(page).hasTitle(Pattern.compile(".*Playwright.*"));
 `;
+const pathPrefixedRecording = `
+  page.navigate("https://app.example.test/root/profile?tab=settings");
+  assertThat(page).hasTitle(Pattern.compile(".*Profile.*"));
+`;
 
 test("onboarding help is available from node and wrapper entry points", async () => {
   assert.match(ONBOARD_HELP, /--area <area>/);
@@ -84,6 +88,47 @@ test("fixture mode writes raw recording and complete scaffold without launching 
   assert.equal(existsSync(path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/steps/smokeapp/LandingPageSteps.java")), true);
   assert.equal(existsSync(path.join(repo, "test-suite/src/test/java/com/example/e2e/tests/runner/smokeapp/SmokeAppRunCucumberTest.java")), true);
   assert.match(await readFile(path.join(repo, "test-suite/build.gradle"), "utf8"), /smokeapp:\s*\[/);
+});
+
+test("fixture mode aligns path-prefixed base URL output across metadata summaries and feature steps", async () => {
+  const repo = await createTempRepo();
+  const fixturePath = path.join(repo, "fixture-recording.java");
+  await writeFile(fixturePath, pathPrefixedRecording, "utf8");
+  const draftDir = path.join(repo, "test-suite/build/case-drafts/profileapp/profile-settings");
+
+  const result = await runOnboardCase({
+    repoRoot: repo,
+    draftDir,
+    area: "profileapp",
+    feature: "profile-settings",
+    scenario: "Visitor opens profile settings",
+    baseUrl: "https://app.example.test/root/",
+    path: "profile?tab=settings",
+    taskSuffix: "ProfileApp",
+    fixture: fixturePath
+  }, {
+    runPreflight: passingPreflight,
+    recordInteractive: () => {
+      throw new Error("fixture mode must not launch codegen");
+    }
+  });
+
+  assert.equal(result.mode, "fixture");
+  assert.match(result.output, /Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+
+  const feature = await readFile(path.join(
+    repo,
+    "test-suite/src/test/resources/features/profileapp/profile-settings.feature"
+  ), "utf8");
+  assert.match(feature, /Given the user opens the relative path "profile\?tab=settings"/);
+
+  const metadata = JSON.parse(await readFile(path.join(draftDir, "metadata.json"), "utf8"));
+  const summary = await readFile(path.join(draftDir, "draft-summary.md"), "utf8");
+  assert.equal(metadata.path, "profile?tab=settings");
+  assert.equal(metadata.resolvedUrl, "https://app.example.test/root/profile?tab=settings");
+  assert.ok(metadata.steps.includes('Given the user opens the relative path "profile?tab=settings"'));
+  assert.match(summary, /- Path: profile\?tab=settings/);
+  assert.match(summary, /- Resolved URL: https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
 });
 
 test("shell wrapper fixture run exposes the same onboarding outputs", async () => {
@@ -218,6 +263,40 @@ test("interactive mode delegates to codegen for the resolved URL before generati
   assert.equal(metadata.onboardingMode, "interactive");
   assert.equal(metadata.recording, "recording.java");
   assert.ok(metadata.generatedFiles.some((file) => file.endsWith("recording.java")));
+});
+
+test("interactive mode preserves path-relative navigation when resolving a path-prefixed base URL", async () => {
+  const repo = await createTempRepo();
+  const draftDir = path.join(repo, "test-suite/build/case-drafts/liveapp/profile-settings");
+  let recordedRequest;
+
+  const result = await runOnboardCase({
+    repoRoot: repo,
+    draftDir,
+    area: "liveapp",
+    feature: "profile-settings",
+    scenario: "Visitor opens profile settings",
+    baseUrl: "https://app.example.test/root/",
+    path: "profile?tab=settings",
+    taskSuffix: "LiveApp",
+    mode: "interactive"
+  }, {
+    runPreflight: passingPreflight,
+    recordInteractive: async (request) => {
+      recordedRequest = request;
+      await mkdir(request.draftDir, { recursive: true });
+      await writeFile(path.join(request.draftDir, "recording.java"), pathPrefixedRecording, "utf8");
+    }
+  });
+
+  assert.equal(recordedRequest.path, "profile?tab=settings");
+  assert.equal(recordedRequest.url, "https://app.example.test/root/profile?tab=settings");
+  assert.match(result.output, /Interactive mode: launching Playwright codegen for https:\/\/app\.example\.test\/root\/profile\?tab=settings/);
+
+  const metadata = JSON.parse(await readFile(path.join(draftDir, "metadata.json"), "utf8"));
+  assert.equal(metadata.path, "profile?tab=settings");
+  assert.equal(metadata.resolvedUrl, "https://app.example.test/root/profile?tab=settings");
+  assert.ok(metadata.steps.includes('Given the user opens the relative path "profile?tab=settings"'));
 });
 
 test("interactive mode refuses scaffold conflicts before launching codegen or writing drafts", async () => {

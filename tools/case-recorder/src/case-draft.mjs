@@ -1,10 +1,11 @@
 import { gherkinString, humanize, javaString, toPascalCase } from "./names.mjs";
+import { navigationTargetForRecordedUrl } from "./url-resolution.mjs";
 
 export function generateCaseDraft(recording, options) {
   const feature = requiredText(options.feature, "feature");
   const area = requiredText(options.area, "area");
   const scenario = textOr(options.scenario, humanize(feature));
-  const fallbackPath = textOr(options.path, "/");
+  const fallbackPath = pathOr(options.path, "/");
   const baseUrl = textOr(options.baseUrl);
   const resolvedUrl = textOr(options.resolvedUrl);
   const statements = extractRecordedStatements(recording);
@@ -178,7 +179,7 @@ function convertStatements(statements, fallbackPath, baseUrl) {
     }
   }
 
-  if (steps.length === 0 && fallbackPath) {
+  if (steps.length === 0 && fallbackPath !== undefined && fallbackPath !== null) {
     const fallbackStep = `Given the user opens the relative path "${gherkinString(fallbackPath)}"`;
     steps.push(fallbackStep);
     actionInventory.push({
@@ -196,7 +197,10 @@ function convertStatements(statements, fallbackPath, baseUrl) {
 function convertStatement(statement, fallbackPath, baseUrl, firstStep) {
   const navigate = matchOne(statement, /^page\.navigate\("((?:\\.|[^"\\])*)"\);$/s);
   if (navigate) {
-    const pathValue = toRelativePath(unescapeJavaString(navigate[1]), baseUrl) ?? fallbackPath;
+    const pathValue = navigationTargetForRecordedUrl(unescapeJavaString(navigate[1]), {
+      baseUrl,
+      fallbackTarget: fallbackPath
+    }) ?? fallbackPath;
     return {
       supported: true,
       text: `${firstStep ? "Given" : "And"} the user opens the relative path "${gherkinString(pathValue)}"`
@@ -344,23 +348,6 @@ function roleName(role) {
   return role.toLowerCase().replace(/_/g, "-");
 }
 
-function toRelativePath(url, baseUrl) {
-  if (!baseUrl) {
-    return null;
-  }
-
-  try {
-    const parsedUrl = new URL(url);
-    const parsedBaseUrl = new URL(baseUrl);
-    if (parsedUrl.origin !== parsedBaseUrl.origin) {
-      return null;
-    }
-    return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}` || "/";
-  } catch {
-    return url.startsWith("/") ? url : null;
-  }
-}
-
 function unescapeJavaString(value) {
   return value
     .replace(/\\"/g, '"')
@@ -379,6 +366,16 @@ function requiredText(value, label) {
 
 function textOr(value, fallback = undefined) {
   if (typeof value !== "string" || value.trim().length === 0) {
+    return fallback;
+  }
+  return value.trim();
+}
+
+function pathOr(value, fallback = undefined) {
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value !== "string") {
     return fallback;
   }
   return value.trim();
