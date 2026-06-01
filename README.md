@@ -41,8 +41,9 @@ This is a multi-module end-to-end test automation framework built from scratch:
 
 The core module provides:
 
-- `FrameworkConfig`: centrally manages settings such as `base.url`, `browser`, `headless`, and local browser mode via system properties.
+- `FrameworkConfig`: centrally manages settings such as `e2e.baseUrl` / `E2E_BASE_URL`, `browser`, `headless`, local browser mode, and opt-in OIDC mode.
 - `PlaywrightFactory` / `PlaywrightManager`: manages browser, context, and page lifecycle.
+- `core.auth.oidc`: provides pluggable repo-local OIDC bootstrap handlers for saved-session and API-token startup.
 - `ScenarioContext`: supports sharing scenario-scoped data across step definitions.
 - `CucumberHooks`: automatically creates sessions before each scenario, captures screenshots on failure, writes traces, and attaches failure artifacts to Allure.
 
@@ -50,11 +51,11 @@ The core module provides:
 
 The test module provides:
 
-- `CommonRunCucumberTest` and `DemoAppRunCucumberTest`: explicit entry points split by area / app.
+- `CommonRunCucumberTest`, `DemoAppRunCucumberTest`, and `SampleAppRunCucumberTest`: explicit entry points split by area / app.
 - `RunCucumberTest`: the default full-suite entry point used by Gradle `test` and direct JUnit execution.
 - `steps/common`: reusable steps shared across applications.
-- `steps/demoapp`: step definitions split by business app.
-- `features/common` and `features/demoapp`: feature files organized by app.
+- `steps/demoapp` and `steps/sampleapp`: step definitions split by business app.
+- `features/common`, `features/demoapp`, and `features/sample-app`: feature files organized by app.
 
 ## Workflow Entry Points
 
@@ -118,20 +119,26 @@ If you want to reuse local browser mode on non-Windows environments as well, exp
 
 ```bash
 ./gradlew clean test \
-  -Dbase.url=https://playwright.dev \
+  -De2e.baseUrl=https://playwright.dev \
   -Dbrowser=chromium \
   -Dheadless=true \
   -Dslowmo=0
 ```
+
+`base.url` still works as a legacy fallback, but new framework configuration should prefer `e2e.baseUrl` or `E2E_BASE_URL`.
 
 ### 5. Run a Specific Area / App Only
 
 ```bash
 ./gradlew :test-suite:testCommon
 ./gradlew :test-suite:testDemoApp
+./gradlew :test-suite:testSampleApp
+./gradlew :test-suite:testSampleAppOidc
 ```
 
 These tasks run their own area-specific runners and generate separate reports and artifact directories.
+`testSampleApp` starts the repo-local sample app on `127.0.0.1:3110` and runs the baseline flow.
+`testSampleAppOidc` runs the same app through the shared OIDC saved-session bootstrap path without a human login.
 
 ### 6. Explicitly Run All Areas as an Aggregate
 

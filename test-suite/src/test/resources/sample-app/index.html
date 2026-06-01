@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sample App</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+        max-width: 48rem;
+      }
+
+      button {
+        display: inline-block;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sample App</h1>
+      <p data-testid="session-state"></p>
+      <p>Counter: <strong data-testid="counter-value">0</strong></p>
+      <button data-testid="increment-counter" type="button">Increment counter</button>
+    </main>
+    <script>
+      const role = localStorage.getItem("sample-app-role");
+      const source = localStorage.getItem("sample-app-auth-source");
+      const sessionState = document.querySelector("[data-testid='session-state']");
+      const counterValue = document.querySelector("[data-testid='counter-value']");
+      const incrementCounter = document.querySelector("[data-testid='increment-counter']");
+
+      let counter = 0;
+      sessionState.textContent = role
+        ? `Authenticated as ${role}${source ? ` via ${source}` : ""}`
+        : "Guest session";
+
+      incrementCounter.addEventListener("click", () => {
+        counter += 1;
+        counterValue.textContent = String(counter);
+      });
+    </script>
+  </body>
+</html>

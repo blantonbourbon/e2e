@@ -9,18 +9,22 @@ import java.util.Objects;
 public final class PlaywrightManager {
     private static final ThreadLocal<PlaywrightSession> SESSION = new ThreadLocal<>();
     private static final ThreadLocal<ScenarioContext> CONTEXT = ThreadLocal.withInitial(ScenarioContext::new);
-    private static final FrameworkConfig CONFIG = FrameworkConfig.fromSystemProperties();
-    private static final PlaywrightFactory FACTORY = new PlaywrightFactory(CONFIG);
+    private static FrameworkConfig config;
+    private static PlaywrightFactory factory;
 
     private PlaywrightManager() {
     }
 
     public static void start(String scenarioArtifactId) {
-        SESSION.set(FACTORY.createSession(scenarioArtifactId));
+        SESSION.set(factory().createSession(scenarioArtifactId));
     }
 
     public static Page page() {
         return Objects.requireNonNull(SESSION.get(), "Playwright session has not been started").page();
+    }
+
+    public static boolean hasSession() {
+        return SESSION.get() != null;
     }
 
     public static ScenarioContext scenarioContext() {
@@ -28,7 +32,10 @@ public final class PlaywrightManager {
     }
 
     public static FrameworkConfig config() {
-        return CONFIG;
+        if (config == null) {
+            factory();
+        }
+        return config;
     }
 
     public static void stop() {
@@ -39,5 +46,13 @@ public final class PlaywrightManager {
         }
         CONTEXT.get().clear();
         CONTEXT.remove();
+    }
+
+    private static synchronized PlaywrightFactory factory() {
+        if (factory == null) {
+            config = FrameworkConfig.fromSystemProperties();
+            factory = new PlaywrightFactory(config);
+        }
+        return factory;
     }
 }

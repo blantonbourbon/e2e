@@ -22,6 +22,10 @@ public class CucumberHooks {
     @After(order = 100)
     public void afterScenario(Scenario scenario) {
         try {
+            if (!PlaywrightManager.hasSession()) {
+                return;
+            }
+
             if (scenario.isFailed()) {
                 byte[] screenshot = PlaywrightManager.page().screenshot();
                 scenario.attach(screenshot, "image/png", scenario.getName());

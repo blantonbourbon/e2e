@@ -19,6 +19,11 @@ def cypressMigrationCli = cypressMigrationDir.toPath().resolve('src/cli.mjs').to
 def syntheticCypressDir = rootProject.file('synthetic-cypress')
 def cypressMigrationOutputDir = rootProject.layout.buildDirectory.dir('cypress-migration')
 def forwardedSystemProperties = [
+        'e2e.baseUrl',
+        'e2e.auth.mode',
+        'e2e.oidc.handler',
+        'e2e.oidc.storageState',
+        'e2e.oidc.apiToken',
         'base.url',
         'browser',
         'browser.channel',
@@ -65,6 +70,23 @@ def cucumberAreas = [
                         testIdAttribute: 'data-testid'
                 ]
         ],
+        sampleapp    : [
+                taskName       : 'testSampleApp',
+                taskSuffix     : 'SampleApp',
+                baseUrl        : 'http://127.0.0.1:3110/',
+                runnerClassName: 'com.example.e2e.tests.runner.sampleapp.SampleAppRunCucumberTest',
+                glue           : [
+                        'com.example.e2e.core.hooks',
+                        'com.example.e2e.tests.steps.sampleapp'
+                ],
+                parallelEnabled: false,
+                parallelism    : 1,
+                sampleServer   : true,
+                tags           : 'not @oidc and not @diagnostic-failure',
+                explore        : [
+                        enabled: false
+                ]
+        ],
         migrationdemo: [
                 taskName       : 'testMigrationDemo',
                 taskSuffix     : 'MigrationDemo',
@@ -99,6 +121,13 @@ def localBrowserModeEnabled = Boolean.parseBoolean(
         System.getProperty('playwright.use.local.browser', Boolean.toString(isWindows))
 )
 
+def resolveRuntimeBaseUrl = { Map<String, ?> areaConfig ->
+    System.getProperty('e2e.baseUrl')
+            ?: System.getenv('E2E_BASE_URL')
+            ?: System.getProperty('base.url')
+            ?: areaConfig.baseUrl
+}
+
 def configureSharedRuntime = { Test task, String artifactsRoot ->
     task.systemProperty 'artifacts.dir', artifactsRoot
     task.systemProperty 'cucumber.plugin', cucumberPluginValue
@@ -131,12 +160,16 @@ def configureAreaTestTask = { Test task, String areaName, Map<String, ?> areaCon
         failOnNoMatchingTests = true
     }
 
-    def baseUrl = System.getProperty('base.url') ?: areaConfig.baseUrl
+    def baseUrl = resolveRuntimeBaseUrl(areaConfig)
     if (baseUrl != null) {
+        task.systemProperty 'e2e.baseUrl', baseUrl
         task.systemProperty 'base.url', baseUrl
     }
     task.systemProperty 'cucumber.glue', areaConfig.glue.join(',')
     task.systemProperty 'cucumber.execution.parallel.enabled', areaConfig.parallelEnabled.toString()
+    if (areaConfig.tags != null && System.getProperty('cucumber.filter.tags') == null) {
+        task.systemProperty 'cucumber.filter.tags', areaConfig.tags
+    }
 
     configureSharedRuntime(task, layout.buildDirectory.dir("artifacts/${areaName}").get().asFile.absolutePath)
     forwardRuntimeProperties(task)
@@ -263,9 +296,83 @@ def writePlaywrightCliConfig = { String areaName, Map<String, ?> areaConfig ->
     configFile
 }
 
+tasks.register('installPlaywrightBrowsers', JavaExec) {
+    group = 'verification'
+    description = 'Installs or verifies Playwright-managed Chromium browser binaries for first-run E2E execution.'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.microsoft.playwright.CLI'
+    args 'install', 'chromium'
+    onlyIf { !localBrowserModeEnabled }
+}
+
+def sampleAppServerRef = [server: null]
+def sampleAppRoot = layout.projectDirectory.dir('src/test/resources/sample-app').asFile.toPath()
+
+tasks.register('startSampleAppServer') {
+    group = 'verification'
+    description = 'Starts the repo-local sample app on 127.0.0.1:3110.'
+
+    doLast {
+        if (sampleAppServerRef.server != null) {
+            return
+        }
+        if (!java.nio.file.Files.isDirectory(sampleAppRoot)) {
+            throw new GradleException("Missing sample app resource directory: ${sampleAppRoot}")
+        }
+
+        def server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress('127.0.0.1', 3110), 0)
+        server.createContext('/') { exchange ->
+            try {
+                String requestPath = exchange.requestURI.path
+                if (requestPath == null || requestPath == '/' || requestPath.isBlank()) {
+                    requestPath = '/index.html'
+                }
+
+                def resolvedPath = sampleAppRoot.resolve(requestPath.substring(1)).normalize()
+                if (!resolvedPath.startsWith(sampleAppRoot) || !java.nio.file.Files.isRegularFile(resolvedPath)) {
+                    byte[] notFound = 'Not found'.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                    exchange.sendResponseHeaders(404, notFound.length)
+                    exchange.responseBody.write(notFound)
+                    return
+                }
+
+                String contentType = java.net.URLConnection.guessContentTypeFromName(resolvedPath.fileName.toString())
+                        ?: 'application/octet-stream'
+                byte[] body = java.nio.file.Files.readAllBytes(resolvedPath)
+                exchange.responseHeaders.add('Content-Type', contentType)
+                exchange.sendResponseHeaders(200, body.length)
+                exchange.responseBody.write(body)
+            } finally {
+                exchange.close()
+            }
+        }
+        server.executor = java.util.concurrent.Executors.newCachedThreadPool()
+        server.start()
+        sampleAppServerRef.server = server
+        println 'Started sample app server at http://127.0.0.1:3110/'
+    }
+}
+
+tasks.register('stopSampleAppServer') {
+    group = 'verification'
+    description = 'Stops the repo-local sample app server.'
+
+    doLast {
+        if (sampleAppServerRef.server != null) {
+            sampleAppServerRef.server.stop(0)
+            sampleAppServerRef.server = null
+            println 'Stopped sample app server.'
+        }
+    }
+}
+
 cucumberAreas.each { areaName, areaConfig ->
     tasks.register(areaConfig.taskName, Test) { task ->
         configureAreaTestTask(task, areaName, areaConfig)
+        if (areaConfig.sampleServer) {
+            dependsOn tasks.named('installPlaywrightBrowsers'), tasks.named('startSampleAppServer')
+            finalizedBy tasks.named('stopSampleAppServer')
+        }
     }
 
     def reportAliasTaskName = "allureReport${areaConfig.taskSuffix}"
@@ -341,6 +448,28 @@ cucumberAreas.each { areaName, areaConfig ->
             }
         }
     }
+}
+
+tasks.register('testSampleAppOidc', Test) { task ->
+    Map<String, ?> areaConfig = requireCucumberArea('sampleapp')
+    configureAreaTestTask(task, 'sampleapp', areaConfig)
+    group = 'verification'
+    description = 'Runs the sample app OIDC-enabled scenarios with repo-local fake saved-session auth.'
+    dependsOn tasks.named('installPlaywrightBrowsers'), tasks.named('startSampleAppServer')
+    finalizedBy tasks.named('stopSampleAppServer')
+    systemProperty 'cucumber.filter.tags', '@oidc'
+    systemProperty 'e2e.auth.mode', 'oidc'
+    systemProperty 'e2e.oidc.handler', System.getProperty('e2e.oidc.handler') ?: 'saved-session'
+}
+
+tasks.register('testSampleAppAssertionFailure', Test) { task ->
+    Map<String, ?> areaConfig = requireCucumberArea('sampleapp')
+    configureAreaTestTask(task, 'sampleapp', areaConfig)
+    group = 'verification'
+    description = 'Runs the sample app diagnostic scenario that intentionally fails an assertion for failure-artifact validation.'
+    dependsOn tasks.named('installPlaywrightBrowsers'), tasks.named('startSampleAppServer')
+    finalizedBy tasks.named('stopSampleAppServer')
+    systemProperty 'cucumber.filter.tags', '@diagnostic-failure'
 }
 
 tasks.register('showExploreSessions') {
@@ -711,5 +840,8 @@ test {
     }
 
     configureSharedRuntime(delegate, layout.buildDirectory.dir('artifacts/all').get().asFile.absolutePath)
+    if (System.getProperty('cucumber.filter.tags') == null) {
+        systemProperty 'cucumber.filter.tags', 'not @sample-app'
+    }
     forwardRuntimeProperties(delegate)
 }

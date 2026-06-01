@@ -4,6 +4,8 @@ plugins {
 
 def playwrightVersion = '1.52.0'
 def cucumberVersion = '7.22.1'
+def junitPlatformVersion = '1.12.2'
+def junitJupiterVersion = '5.12.2'
 def slf4jVersion = '2.0.17'
 def allureVersion = rootProject.ext.allureVersion
 
@@ -15,4 +17,8 @@ dependencies {
     api "org.slf4j:slf4j-api:${slf4jVersion}"
 
     runtimeOnly "org.slf4j:slf4j-simple:${slf4jVersion}"
+
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${junitJupiterVersion}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${junitJupiterVersion}"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
 }

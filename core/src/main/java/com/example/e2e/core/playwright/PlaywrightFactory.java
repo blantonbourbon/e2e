@@ -1,5 +1,7 @@
 package com.example.e2e.core.playwright;
 
+import com.example.e2e.core.auth.oidc.OidcBootstrapPlan;
+import com.example.e2e.core.auth.oidc.PluggableOidcAuthBootstrapper;
 import com.example.e2e.core.config.FrameworkConfig;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
@@ -14,9 +16,11 @@ import java.util.Objects;
 
 public class PlaywrightFactory {
     private final FrameworkConfig config;
+    private final PluggableOidcAuthBootstrapper authBootstrapper;
 
     public PlaywrightFactory(FrameworkConfig config) {
         this.config = Objects.requireNonNull(config, "config must not be null");
+        this.authBootstrapper = new PluggableOidcAuthBootstrapper();
     }
 
     public PlaywrightSession createSession(String scenarioArtifactId) {
@@ -47,7 +51,12 @@ public class PlaywrightFactory {
                 .setRecordVideoDir(config.videosDir().resolve(scenarioArtifactId))
                 .setViewportSize(1440, 900);
 
+        OidcBootstrapPlan authPlan = authBootstrapper.prepare(config, scenarioArtifactId);
+        authPlan.applyTo(contextOptions);
+        System.out.println("E2E auth bootstrap: " + authPlan.description());
+
         BrowserContext context = browser.newContext(contextOptions);
+        authPlan.applyTo(context);
         context.tracing().start(new Tracing.StartOptions()
                 .setScreenshots(true)
                 .setSnapshots(true)

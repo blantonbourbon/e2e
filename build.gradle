@@ -23,6 +23,10 @@ subprojects {
         useJUnitPlatform()
         testLogging {
             events 'passed', 'skipped', 'failed'
+            exceptionFormat 'full'
+            showExceptions true
+            showCauses true
+            showStackTraces true
         }
         systemProperty 'file.encoding', 'UTF-8'
     }
