@@ -9,7 +9,7 @@
     "record": "node src/record.mjs",
     "generate": "node src/generate.mjs",
     "onboard": "node src/onboard.mjs",
-    "onboard:smoke": "node src/onboard-smoke.mjs"
+    "onboard:smoke": "node src/onboard-smoke.mjs --repo-root ../.."
   },
   "engines": {
     "node": ">=20"

@@ -19,7 +19,7 @@ function runCli(args) {
 }
 
 describe("Cypress migration CLI commands", () => {
-  it("documents inventory, risk, draft, oracle, and aggregate check usage", () => {
+  it("documents inventory, risk, draft, oracle, evidence, and aggregate check usage", () => {
     const result = runCli(["--help"]);
 
     assert.equal(result.status, 0, result.stderr);
@@ -27,13 +27,19 @@ describe("Cypress migration CLI commands", () => {
     assert.match(result.stdout, /risk\s+Generate reviewable risk flags/);
     assert.match(result.stdout, /draft\s+Generate review-first Cucumber feature sketches/);
     assert.match(result.stdout, /oracle\s+Run the synthetic Cypress oracle/);
+    assert.match(result.stdout, /evidence\s+Map synthetic Cypress tests/);
     assert.match(result.stdout, /check\s+Run the full Cypress migration check/);
     assert.match(result.stdout, /--source-root <path>/);
     assert.match(result.stdout, /--output-dir <path>/);
+    assert.match(result.stdout, /evidence --source-root <path> --output-dir <path> --repo-root <path>/);
+    assert.match(result.stdout, /--cypress-status <status>/);
+    assert.match(result.stdout, /--playwright-status <status>/);
     assert.match(result.stdout, /--port <number>.*8790/);
-    assert.match(result.stdout, /refuses output locations inside Cypress\s+source roots/);
+    assert.match(result.stdout, /Artifact-writing commands write review evidence under --output-dir/);
+    assert.match(result.stdout, /refuse\s+output locations inside Cypress source roots/);
     assert.match(result.stdout, /docs\/, \.windsurf\/, \.codex\//);
     assert.match(result.stdout, /build\/cypress-migration/);
+    assert.match(result.stdout, /aggregate check also runs\s+Gradle validation/);
     assert.match(result.stdout, /:test-suite:cypressMigrationCheck/);
   });
 

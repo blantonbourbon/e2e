@@ -385,6 +385,7 @@ Or:
 
 - `test-suite/build/artifacts/common/`
 - `test-suite/build/artifacts/demoapp/`
+- `test-suite/build/artifacts/migrationdemo/`
 - `test-suite/build/allure-results/`
 
 This avoids browser artifacts from different areas overwriting each other during split task execution, while still allowing Allure to aggregate the test results in one place.

@@ -47,6 +47,7 @@ Usage:
   node tools/cypress-migration/src/cli.mjs risk --source-root <path> --output-dir <path>
   node tools/cypress-migration/src/cli.mjs draft --source-root <path> --output-dir <path>
   node tools/cypress-migration/src/cli.mjs oracle --source-root <path> --output-dir <path> [--port 8790]
+  node tools/cypress-migration/src/cli.mjs evidence --source-root <path> --output-dir <path> --repo-root <path> [--cypress-status passed|failed|not-run] [--playwright-status passed|failed|not-run]
   node tools/cypress-migration/src/cli.mjs check --source-root <path> --output-dir <path> --repo-root <path>
   node tools/cypress-migration/src/cli.mjs --help
 
@@ -77,10 +78,11 @@ Generated artifacts:
   evidence-summary.json
   evidence-summary.md
 
-The CLI writes only under --output-dir and refuses output locations inside Cypress
-source roots, committed repository source/test paths, docs/, .windsurf/, .codex/,
-and test-suite source directories. Use ignored build output such as
-build/cypress-migration.
+Artifact-writing commands write review evidence under --output-dir and refuse
+output locations inside Cypress source roots, committed repository source/test
+paths, docs/, .windsurf/, .codex/, and test-suite source directories. Use ignored
+build output such as build/cypress-migration. The aggregate check also runs
+Gradle validation and may create ignored Gradle build artifacts.
 
 Gradle aggregate:
   ./gradlew :test-suite:cypressMigrationCheck --console=plain --no-daemon -Dheadless=true`;

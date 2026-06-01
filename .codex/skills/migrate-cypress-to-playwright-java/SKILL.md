@@ -64,6 +64,8 @@ node tools/cypress-migration/src/cli.mjs oracle --source-root synthetic-cypress 
 node tools/cypress-migration/src/cli.mjs evidence --source-root synthetic-cypress --output-dir "$MIGRATION_OUT" --repo-root "$PWD" --cypress-status passed --playwright-status passed
 ```
 
+Use the direct `evidence` status flags only after the matching Cypress oracle and Playwright/Cucumber validation commands have actually passed; otherwise prefer the Gradle `cypressMigrationEvidence` or `cypressMigrationCheck` tasks because they wire those dependencies for you.
+
 Generated evidence stays under ignored build output:
 
 ```text

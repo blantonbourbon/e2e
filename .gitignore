@@ -3,6 +3,9 @@ build/
 tools/case-recorder/node_modules/
 tools/cypress-migration/node_modules/
 synthetic-cypress/node_modules/
+synthetic-cypress/cypress/screenshots/
+synthetic-cypress/cypress/videos/
+synthetic-cypress/cypress/downloads/
 */build/
 out/
 gradle/wrapper/*.jar

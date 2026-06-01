@@ -282,6 +282,7 @@ test("legacy recorder package scripts remain backward compatible", async () => {
   assert.equal(packageJson.scripts.record, "node src/record.mjs");
   assert.equal(packageJson.scripts.generate, "node src/generate.mjs");
   assert.equal(packageJson.scripts.onboard, "node src/onboard.mjs");
+  assert.equal(packageJson.scripts["onboard:smoke"], "node src/onboard-smoke.mjs --repo-root ../..");
 });
 
 async function createTempRepo() {

@@ -131,4 +131,41 @@ describe("Synthetic Cypress oracle server lifecycle", () => {
       await rm(outputDir, { recursive: true, force: true });
     }
   });
+
+  it("stops the exact server PID it started when Cypress validation fails", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "cypress-oracle-failure-"));
+    const port = await reservePort();
+    let serverPid;
+
+    try {
+      const result = await runSyntheticOracle({
+        sourceRoot: syntheticRoot,
+        outputDir,
+        port,
+        runCypress: async ({ serverPid: ownedPid }) => {
+          serverPid = ownedPid;
+          return {
+            exitCode: 42,
+            stdout: "",
+            stderr: "fake Cypress run failed",
+          };
+        },
+      });
+
+      assert.equal(result.exitCode, 42);
+      assert.equal(result.status, "failed");
+      assert.equal(result.cleanup.stoppedOwnedPid, serverPid);
+      assert.equal(result.cleanup.portReleased, true);
+      assert.equal(pidIsAlive(serverPid), false);
+      assert.equal(await portCanBind(port), true);
+
+      const evidence = JSON.parse(await readFile(join(outputDir, "oracle-result.json"), "utf8"));
+      assert.equal(evidence.status, "failed");
+      assert.equal(evidence.cleanup.stoppedOwnedPid, serverPid);
+      assert.equal(evidence.cleanup.portReleased, true);
+      assert.match(evidence.cypress.stderr, /fake Cypress run failed/);
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  });
 });
