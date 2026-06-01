@@ -6,6 +6,13 @@
 
 `area` 名称会同时用作 feature 目录、step package 和 Gradle key，因此必须是 Java package 片段：小写字母开头，只包含小写字母和数字，例如 `adminapp`，不要用 `admin-app`。
 
+## 工作流入口
+
+- 推荐的新用例 / 新 area 路径是 record-first onboarding：[`../.codex/skills/record-playwright-cucumber-case/SKILL.md`](../.codex/skills/record-playwright-cucumber-case/SKILL.md) 和 [`../.windsurf/workflows/record-new-test-case.md`](../.windsurf/workflows/record-new-test-case.md)。
+- Cypress-to-Playwright 迁移是 source-based 路径：[`../.codex/skills/migrate-cypress-to-playwright-java/SKILL.md`](../.codex/skills/migrate-cypress-to-playwright-java/SKILL.md)、[`../.codex/skills/migrate-cypress-to-playwright-java/REFERENCE.md`](../.codex/skills/migrate-cypress-to-playwright-java/REFERENCE.md) 和 [`../.windsurf/workflows/cypress-to-playwright-java.md`](../.windsurf/workflows/cypress-to-playwright-java.md)。
+
+两条路径不要混用：record-first onboarding 从浏览器操作或 Playwright Java recording fixture 生成新用例；Cypress 迁移从 Cypress source 和 Cypress run evidence 开始。
+
 ## 1. 建目录
 
 新增 feature 目录：
@@ -157,68 +164,139 @@ Windows 下默认开启本地浏览器模式：
   -Dbrowser=firefox
 ```
 
-## 8. 可选：录制并生成新用例草稿
+## 8. 推荐：record-first onboarding 一次生成完整草稿
 
-如果新 area 已经在 `cucumberAreas` 注册，并且 `glue` 包含 `com.example.e2e.tests.steps.common`，可以先用 recorder 操作浏览器，再生成 Cucumber 草稿：
+如果要从浏览器操作或 fixture recording 新增一个可运行的 area/case，优先用 `:test-suite:onboardCase`。它会在一个 flow 中完成 preflight、录制或读取 fixture、生成 feature/steps、创建 runner、更新 `cucumberAreas`、写 draft metadata，并打印下一步验证命令。
+
+先查看任务和 CLI help：
+
+```bash
+./gradlew :test-suite:tasks --all --console=plain --no-daemon
+./gradlew :test-suite:onboardCase -Phelp=true --console=plain --no-daemon
+node tools/case-recorder/src/onboard.mjs --help
+```
+
+再运行 preflight：
 
 ```bash
 . tools/case-recorder/bin/env.sh
 sh tools/case-recorder/bin/doctor.sh
+./gradlew :test-suite:caseRecorderCheck --console=plain --no-daemon
 ```
 
-doctor 必须先通过。WSL 下它会拒绝 `/mnt/c/...` 这类 Windows 侧 `node` / `npm` / `java`，避免录制和生成链路绕回 Windows 文件系统。可选的 `env.sh` 会在存在时加入 `$HOME/.local/toolchains/node-current/bin` 和 `$HOME/.sdkman/candidates/java/current/bin`。
+doctor 必须先通过。WSL 下它会拒绝 `/mnt/c/...` 这类 Windows 侧 `node` / `npm` / `java`，避免录制和生成链路绕回 Windows 文件系统；请使用 WSL-local Node.js、npm 和 Java 21，并尽量把 checkout、fixture recording、draft output 放在 Linux 文件系统上，避免 `/mnt/c` 性能、锁文件和 CRLF 问题。可选的 `env.sh` 会在存在时加入 `$HOME/.local/toolchains/node-current/bin` 和 `$HOME/.sdkman/candidates/java/current/bin`。
 
-Windows 端请在 Windows 本地 checkout 中运行，不要直接在 `\\wsl.localhost\...` 路径上跑 `gradlew.bat`；Gradle 在 WSL UNC / 映射盘上可能无法创建文件哈希服务。`cmd.exe` 下可以先执行：
+Windows 端请在 Windows 本地 checkout 中运行，不要直接在 `\\wsl.localhost\...` 路径上跑 `gradlew.bat`；Gradle 在 WSL UNC / 映射盘上可能无法创建文件哈希服务。Windows Chromium 默认使用 local-browser mode 和本机 `msedge`。`cmd.exe` 下可以先执行：
 
 ```bat
 call tools\case-recorder\bin\env.cmd
-gradlew.bat :test-suite:caseRecorderTest
+gradlew.bat :test-suite:caseRecorderCheck --console=plain --no-daemon
+tools\case-recorder\bin\onboard-case.cmd --help
+tools\case-recorder\bin\onboard-case.cmd --area adminapp --feature user-profile --scenario "User can open the profile page" --path /profile --base-url https://playwright.dev --task-suffix AdminApp --dry-run
 ```
 
-如果改过 recorder 本身，先跑它自己的测试：
+先 dry-run。dry-run 会列出所有 create/update/skip/conflict、source path、draft path、Gradle task 和 `cucumberAreas` 变化；它不写文件，也不会打开 Playwright codegen：
 
 ```bash
-./gradlew :test-suite:caseRecorderTest
-```
-
-```bash
-./gradlew :test-suite:recordCase \
+./gradlew :test-suite:onboardCase \
   -Parea=adminapp \
   -Pfeature=user-profile \
   -Pscenario="User can open the profile page" \
-  -Ppath=/profile
+  -Ppath=/profile \
+  -PtaskSuffix=AdminApp \
+  -PdryRun=true \
+  --console=plain \
+  --no-daemon \
+  -Dbase.url=https://playwright.dev
 ```
 
-关闭 Playwright codegen 窗口后，原始录制文件会保存到：
-
-```text
-test-suite/build/case-drafts/adminapp/user-profile/
-```
-
-然后生成 feature 和 step draft：
+Interactive mode 会打开 Playwright codegen 到解析后的 URL，关闭 codegen 窗口后继续生成草稿：
 
 ```bash
-./gradlew :test-suite:generateCaseFromRecording \
+./gradlew :test-suite:onboardCase \
   -Parea=adminapp \
-  -Pfeature=user-profile
+  -Pfeature=user-profile \
+  -Pscenario="User can open the profile page" \
+  -Ppath=/profile \
+  -PtaskSuffix=AdminApp \
+  -Pmode=interactive \
+  --console=plain \
+  --no-daemon \
+  -Dbase.url=https://playwright.dev
 ```
 
-生成结果：
+Fixture mode 用已有 `recording.java`，适合自动化验证；它不会打开 browser/codegen：
+
+```bash
+./gradlew :test-suite:onboardCase \
+  -Parea=adminapp \
+  -Pfeature=user-profile \
+  -Pscenario="User can open the profile page" \
+  -Ppath=/profile \
+  -PtaskSuffix=AdminApp \
+  -Pfixture=/absolute/path/to/recording.java \
+  --console=plain \
+  --no-daemon \
+  -Dbase.url=https://playwright.dev
+```
+
+Linux/macOS shell wrapper 暴露同样选项：
+
+```bash
+tools/case-recorder/bin/onboard-case.sh --help
+tools/case-recorder/bin/onboard-case.sh \
+  --area adminapp \
+  --feature user-profile \
+  --scenario "User can open the profile page" \
+  --path /profile \
+  --base-url https://playwright.dev \
+  --task-suffix AdminApp \
+  --dry-run
+```
+
+完整生成 / 更新的输出包括：
 
 ```text
 test-suite/src/test/resources/features/adminapp/user-profile.feature
 test-suite/src/test/java/com/example/e2e/tests/steps/adminapp/UserProfileSteps.java
+test-suite/src/test/java/com/example/e2e/tests/runner/adminapp/AdminAppRunCucumberTest.java
+test-suite/build.gradle                                  # safe cucumberAreas registration
+test-suite/build/case-drafts/adminapp/user-profile/recording.java
+test-suite/build/case-drafts/adminapp/user-profile/metadata.json
 test-suite/build/case-drafts/adminapp/user-profile/case-draft.json
 test-suite/build/case-drafts/adminapp/user-profile/draft-summary.md
 ```
 
+`cucumberAreas` registration 会包含 `taskName`、`taskSuffix`、`runnerClassName`、core/common/area glue、base URL 或默认值、`parallelEnabled: false`、`parallelism: 1` 和 `explore` defaults。已有且安全的 area 会被复用，不会重复生成 runner 或 Gradle entry。
+
 落地规则：
 
-- 生成的 feature 会带 `@draft`，合并前需要改成稳定业务语言。
-- `case-draft.json` 和 `draft-summary.md` 会保留 action inventory，方便先 review 再提升为正式用例。
-- 简单点击、输入、可见性断言会复用 `steps/common/DraftInteractionSteps.java`。
-- 不支持的录制动作会生成明确失败的 step，必须人工改成 app 专属 step 或 interaction。
-- 默认不覆盖已有文件；确认要重生成时再传 `-Pforce=true`。
+- 默认不覆盖已有 source 文件。
+- `-PdryRun=true` / `--dry-run` 只输出计划，不写文件，不启动 codegen。
+- `-Pforce=true` / `--force` 只能在 `metadata.json` 有匹配 ownership evidence 时刷新 generated-owned feature/step drafts；它不会强制改 runner 或 `test-suite/build.gradle`。
+- runner-only、Gradle-only、glue 不匹配、已有 feature 但缺 steps 等 partial scaffold 冲突会在写入前失败，并提示 manual merge。
+- `test-suite/build/case-drafts/**`、raw recordings、screenshots/videos、Allure output 和 dependency directories 不要提交。
+- 生成的 feature 带 `@draft`；`case-draft.json` 和 `draft-summary.md` 会保留 action inventory、unsupported actions、review work 和 next validation command。
+- 不支持的录制动作会生成明确失败的 step，必须人工改成 app 专属 step 或 interaction。生成草稿必须 review 后才能去掉 `@draft` 并提升为正式用例。
+
+验证命令：
+
+```bash
+./gradlew :test-suite:caseRecorderCheck :test-suite:caseRecorderTest --console=plain --no-daemon
+./gradlew :test-suite:caseRecorderOnboardingSmoke --console=plain --no-daemon
+./gradlew :test-suite:testAdminApp --console=plain --no-daemon -Dheadless=true
+./gradlew :core:compileJava :test-suite:testClasses --console=plain --no-daemon
+```
+
+`caseRecorderOnboardingSmoke` 是 fixture-driven unattended smoke：它会复制一个 disposable workspace，使用 synthetic fixture recording 生成 `smokeapp`，验证 `testSmokeApp` task discovery、`testAllApps --dry-run`、`testClasses` 和 generated area headless execution，然后删除 workspace。
+
+Legacy split commands 仍然保留，适合已经注册过的 area：
+
+```bash
+./gradlew :test-suite:recordCase -Parea=adminapp -Pfeature=user-profile -Pscenario="User can open the profile page" -Ppath=/profile --console=plain --no-daemon
+./gradlew :test-suite:generateCaseFromRecording -Parea=adminapp -Pfeature=user-profile --console=plain --no-daemon
+./gradlew :test-suite:generateCase -Parea=adminapp -Pfeature=user-profile --console=plain --no-daemon
+```
 
 ## 9. Cypress 迁移和录制新用例的边界
 

@@ -56,6 +56,13 @@ The test module provides:
 - `steps/demoapp`: step definitions split by business app.
 - `features/common` and `features/demoapp`: feature files organized by app.
 
+## Workflow Entry Points
+
+- Record-first new case / new app onboarding: [.codex/skills/record-playwright-cucumber-case/SKILL.md](.codex/skills/record-playwright-cucumber-case/SKILL.md), [.windsurf/workflows/record-new-test-case.md](.windsurf/workflows/record-new-test-case.md), and [docs/new-app-onboarding.md](docs/new-app-onboarding.md).
+- Cypress-to-Playwright migration: [.codex/skills/migrate-cypress-to-playwright-java/SKILL.md](.codex/skills/migrate-cypress-to-playwright-java/SKILL.md), [.codex/skills/migrate-cypress-to-playwright-java/REFERENCE.md](.codex/skills/migrate-cypress-to-playwright-java/REFERENCE.md), and [.windsurf/workflows/cypress-to-playwright-java.md](.windsurf/workflows/cypress-to-playwright-java.md).
+
+Keep these workflows separate: record-first onboarding starts from browser actions or a Playwright recording fixture, while Cypress migration starts from Cypress source plus Cypress run evidence.
+
 ## How To Run
 
 ### 1. Generate the Gradle Wrapper
@@ -132,64 +139,134 @@ These tasks run their own area-specific runners and generate separate reports an
 ./gradlew :test-suite:testAllApps
 ```
 
-### 7. Record and Generate a Case Draft
+### 7. Record-First Onboard a New Case or Area
 
-Use the Node-based recorder when you want to operate the browser first and turn the captured actions into Cucumber drafts afterwards:
+Use the recorder when you want to operate the browser first, or reuse a Playwright Java recording fixture, and generate a complete Cucumber/Gradle scaffold afterwards. This record-first flow is for new Playwright/Cucumber cases. Cypress-to-Playwright migration is source-based; use the Cypress migration commands in the next section instead of manual recording as the default migration path.
 
-This record-first flow is for new Playwright/Cucumber cases. Cypress-to-Playwright migration is source-based; use the Cypress migration commands in the next section instead of manual recording as the default migration path.
+First discover and preflight the command surface:
 
 ```bash
+./gradlew :test-suite:tasks --all --console=plain --no-daemon
+./gradlew :test-suite:onboardCase -Phelp=true --console=plain --no-daemon
+node tools/case-recorder/src/onboard.mjs --help
 . tools/case-recorder/bin/env.sh
 sh tools/case-recorder/bin/doctor.sh
+./gradlew :test-suite:caseRecorderCheck --console=plain --no-daemon
 ```
 
-The doctor must pass before recording. On WSL, it rejects Windows-backed executables such as `/mnt/c/.../npm`; install and use WSL-local Node.js, npm, and Java 21 so recording and generation do not fall back to Windows filesystem access. The optional `env.sh` helper adds `$HOME/.local/toolchains/node-current/bin` and `$HOME/.sdkman/candidates/java/current/bin` when they exist.
+The doctor must pass before recording. On WSL, it rejects Windows-backed executables such as `/mnt/c/.../npm`; install and use WSL-local Node.js, npm, and Java 21 so recording and generation do not fall back to Windows filesystem access. Keep fixture recordings and the checkout on the Linux filesystem where practical to avoid `/mnt/c` slowness, file-locking differences, and CRLF line endings. The optional `env.sh` helper adds `$HOME/.local/toolchains/node-current/bin` and `$HOME/.sdkman/candidates/java/current/bin` when they exist.
 
-On Windows, run from a Windows-local checkout, not a `\\wsl.localhost\...` path. Windows Gradle can fail while hashing files on WSL UNC/mapped drives. From `cmd.exe`, use:
+On Windows, run from a Windows-local checkout, not a `\\wsl.localhost\...` path. Windows Gradle can fail while hashing files on WSL UNC/mapped drives. Windows Chromium runs default to local-browser mode and local `msedge` unless you specify a channel/path. From `cmd.exe`, use:
 
 ```bat
 call tools\case-recorder\bin\env.cmd
-gradlew.bat :test-suite:caseRecorderTest
+gradlew.bat :test-suite:caseRecorderCheck --console=plain --no-daemon
+tools\case-recorder\bin\onboard-case.cmd --help
+tools\case-recorder\bin\onboard-case.cmd --area adminapp --feature user-profile --scenario "User can open the profile page" --path /profile --base-url https://playwright.dev --task-suffix AdminApp --dry-run
 ```
 
-To run the recorder's own unit tests through Gradle:
+Dry-run the complete plan before writing or launching codegen:
 
 ```bash
-./gradlew :test-suite:caseRecorderTest
+./gradlew :test-suite:onboardCase \
+  -Parea=adminapp \
+  -Pfeature=user-profile \
+  -Pscenario="User can open the profile page" \
+  -Ppath=/profile \
+  -PtaskSuffix=AdminApp \
+  -PdryRun=true \
+  --console=plain \
+  --no-daemon \
+  -Dbase.url=https://playwright.dev
 ```
+
+Interactive mode launches Playwright codegen for the resolved URL, writes `recording.java` and `metadata.json`, then generates the scaffold after you close the codegen window:
 
 ```bash
-./gradlew :test-suite:recordCase \
-  -Parea=demoapp \
-  -Pfeature=getting-started \
-  -Pscenario="User can open the getting started guide" \
-  -Ppath=/
+./gradlew :test-suite:onboardCase \
+  -Parea=adminapp \
+  -Pfeature=user-profile \
+  -Pscenario="User can open the profile page" \
+  -Ppath=/profile \
+  -PtaskSuffix=AdminApp \
+  -Pmode=interactive \
+  --console=plain \
+  --no-daemon \
+  -Dbase.url=https://playwright.dev
 ```
 
-Close the Playwright codegen window when the flow is complete. The raw recording is written under:
-
-```text
-test-suite/build/case-drafts/<area>/<feature>/
-```
-
-Then generate the Cucumber drafts:
+Fixture mode is unattended and does not launch codegen:
 
 ```bash
-./gradlew :test-suite:generateCaseFromRecording \
-  -Parea=demoapp \
-  -Pfeature=getting-started
+./gradlew :test-suite:onboardCase \
+  -Parea=adminapp \
+  -Pfeature=user-profile \
+  -Pscenario="User can open the profile page" \
+  -Ppath=/profile \
+  -PtaskSuffix=AdminApp \
+  -Pfixture=/absolute/path/to/recording.java \
+  --console=plain \
+  --no-daemon \
+  -Dbase.url=https://playwright.dev
 ```
 
-This creates:
+The shell wrapper exposes the same onboarding options:
+
+```bash
+tools/case-recorder/bin/onboard-case.sh --help
+tools/case-recorder/bin/onboard-case.sh \
+  --area adminapp \
+  --feature user-profile \
+  --scenario "User can open the profile page" \
+  --path /profile \
+  --base-url https://playwright.dev \
+  --task-suffix AdminApp \
+  --dry-run
+```
+
+For a new area, onboarding creates or updates:
 
 ```text
 test-suite/src/test/resources/features/<area>/<feature>.feature
-test-suite/src/test/java/com/example/e2e/tests/steps/<area>/<Feature>Steps.java
+test-suite/src/test/java/com/example/e2e/tests/steps/<area>/<FeaturePascal>Steps.java
+test-suite/src/test/java/com/example/e2e/tests/runner/<area>/<TaskSuffix>RunCucumberTest.java
+test-suite/build.gradle                                  # safe cucumberAreas registration
+test-suite/build/case-drafts/<area>/<feature>/recording.java
+test-suite/build/case-drafts/<area>/<feature>/metadata.json
 test-suite/build/case-drafts/<area>/<feature>/case-draft.json
 test-suite/build/case-drafts/<area>/<feature>/draft-summary.md
 ```
 
-Generated feature files are tagged with `@draft` and use common draft interaction steps for simple clicks, fills, and visibility checks. Review the generated scenario language and draft pack before treating it as a committed business case. Unsupported recorded actions are emitted as explicit failing step definitions until reviewed. Existing files are not overwritten unless you pass `-Pforce=true`.
+The generated `cucumberAreas` entry includes `taskName`, `taskSuffix`, `runnerClassName`, core/common/area glue, base URL or documented default, `parallelEnabled: false`, `parallelism: 1`, and `explore` defaults. Existing registered areas are reused instead of duplicating runners or Gradle entries.
+
+Safety rules:
+
+- Default execution refuses to overwrite existing source files.
+- `-PdryRun=true` / `--dry-run` writes nothing and does not launch codegen.
+- `-Pforce=true` / `--force` only refreshes generated-owned feature/step drafts when `metadata.json` ownership evidence matches; it does not force runner or Gradle registration changes.
+- Runner-only, Gradle-only, mismatched glue/runner, and feature-without-step states fail before writes with manual-merge guidance.
+- Keep `test-suite/build/case-drafts/**`, raw recordings, screenshots/videos, Allure output, and dependency directories out of commits.
+
+Generated feature files are tagged with `@draft` and use common draft interaction steps for simple clicks, fills, navigation, and visibility checks. Review the generated scenario language, selectors, `case-draft.json`, and `draft-summary.md` before promotion. Unsupported recorded actions are emitted as explicit failing step definitions until reviewed and replaced with app-specific behavior; generated drafts are not production-ready tests.
+
+Validation commands:
+
+```bash
+./gradlew :test-suite:caseRecorderCheck :test-suite:caseRecorderTest --console=plain --no-daemon
+./gradlew :test-suite:caseRecorderOnboardingSmoke --console=plain --no-daemon
+./gradlew :test-suite:testAdminApp --console=plain --no-daemon -Dheadless=true
+./gradlew :core:compileJava :test-suite:testClasses --console=plain --no-daemon
+```
+
+`caseRecorderOnboardingSmoke` is fixture-driven: it creates a disposable workspace, generates a `smokeapp` area from a synthetic recording, verifies `testSmokeApp` discovery and `testAllApps --dry-run`, compiles test classes, runs the generated area headlessly, and removes the workspace.
+
+The legacy split commands remain available for existing registered areas:
+
+```bash
+./gradlew :test-suite:recordCase -Parea=demoapp -Pfeature=getting-started -Pscenario="User can open the guide" -Ppath=/ --console=plain --no-daemon
+./gradlew :test-suite:generateCaseFromRecording -Parea=demoapp -Pfeature=getting-started --console=plain --no-daemon
+./gradlew :test-suite:generateCase -Parea=demoapp -Pfeature=getting-started --console=plain --no-daemon
+```
 
 ### 8. Migrate Cypress Source With the Executable Oracle
 
