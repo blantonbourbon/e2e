@@ -36,6 +36,8 @@ export async function planCaseScaffold(options) {
   const scenario = textOr(options.scenario, humanize(featureName));
   const testIdAttribute = textOr(options.testIdAttribute, DEFAULT_TEST_ID_ATTRIBUTE);
   const force = Boolean(options.force);
+  const persistRecording = Boolean(options.persistRecording);
+  const recordingFileName = textOr(options.recordingFileName, "recording.java");
 
   validateJavaPackageSegment(areaName, "area");
   validateSlug(featureName, "feature");
@@ -72,6 +74,7 @@ export async function planCaseScaffold(options) {
     sourcePaths.featurePath,
     sourcePaths.stepsPath,
     ...(existingArea ? [] : [sourcePaths.runnerPath, buildGradlePath]),
+    ...(persistRecording ? [path.join(draftDir, recordingFileName)] : []),
     path.join(draftDir, "metadata.json"),
     path.join(draftDir, "case-draft.json"),
     path.join(draftDir, "draft-summary.md")
@@ -152,6 +155,9 @@ export async function planCaseScaffold(options) {
     baseUrl: target.baseUrl,
     path: target.navigationTarget,
     resolvedUrl: target.resolvedUrl,
+    recording: recordingFileName,
+    onboardingMode: textOr(options.onboardingMode),
+    recordingSource: textOr(options.recordingSource),
     taskName: area.taskName,
     taskSuffix: area.taskSuffix,
     runnerClassName: area.runnerClassName,
@@ -166,6 +172,16 @@ export async function planCaseScaffold(options) {
     reviewWork,
     nextValidationCommand
   };
+
+  if (persistRecording) {
+    operations.push(
+      createDraftOperation({
+        kind: "recording",
+        filePath: path.join(draftDir, recordingFileName),
+        contents: options.recording ?? ""
+      })
+    );
+  }
 
   operations.push(
     createDraftOperation({

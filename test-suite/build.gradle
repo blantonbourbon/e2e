@@ -186,8 +186,16 @@ def resolveExploreUrl = { String baseUrl, String path ->
     "${normalizedBaseUrl}${normalizedPath}"
 }
 
+def caseRecorderProjectProperty = { String propertyName ->
+    def propertyValue = gradle.startParameter.projectProperties[propertyName]?.toString()
+    if (propertyValue == null && propertyName != 'path') {
+        propertyValue = project.findProperty(propertyName)?.toString()
+    }
+    propertyValue
+}
+
 def requireProjectProperty = { String propertyName ->
-    def propertyValue = project.findProperty(propertyName)?.toString()
+    def propertyValue = caseRecorderProjectProperty(propertyName)
     if (propertyValue == null || propertyValue.isBlank()) {
         throw new GradleException("Missing required project property: -P${propertyName}=...")
     }
@@ -195,7 +203,7 @@ def requireProjectProperty = { String propertyName ->
 }
 
 def optionalProjectProperty = { String propertyName, String defaultValue = null ->
-    def propertyValue = project.findProperty(propertyName)?.toString()
+    def propertyValue = caseRecorderProjectProperty(propertyName)
     propertyValue == null || propertyValue.isBlank() ? defaultValue : propertyValue
 }
 
@@ -377,6 +385,25 @@ tasks.register('caseRecorderTest') {
     }
 }
 
+tasks.register('caseRecorderOnboardingSmoke') {
+    group = 'verification'
+    description = 'Runs unattended fixture smoke for :test-suite:onboardCase in a disposable workspace.'
+    dependsOn tasks.named('caseRecorderCheck')
+
+    doLast {
+        exec {
+            workingDir rootProject.projectDir
+            commandLine(
+                    nodeExecutable,
+                    caseRecorderDir.toPath().resolve('src/onboard-smoke.mjs').toFile().absolutePath,
+                    '--repo-root',
+                    rootProject.projectDir.absolutePath
+            )
+            configureNpmRegistry(delegate)
+        }
+    }
+}
+
 def cypressMigrationCommandLine = { String command ->
     [
             nodeExecutable,
@@ -495,7 +522,7 @@ tasks.register('cypressMigrationCheck') {
 
 tasks.register('recordCase') {
     group = 'case onboarding'
-    description = 'Records browser actions into a Java Playwright draft under test-suite/build/case-drafts.'
+    description = 'Legacy recorder: records browser actions into test-suite/build/case-drafts. Requires -Parea -Pfeature -Pscenario; accepts -Ppath -Pforce and -Dbase.url.'
     dependsOn tasks.named('caseRecorderCheck')
 
     doLast {
@@ -524,6 +551,81 @@ tasks.register('recordCase') {
 
         if (Boolean.parseBoolean(optionalProjectProperty('force', 'false'))) {
             toolArgs += '--force'
+        }
+
+        exec {
+            workingDir rootProject.projectDir
+            commandLine([nodeExecutable] + toolArgs)
+            configureNpmRegistry(delegate)
+        }
+    }
+}
+
+tasks.register('onboardCase') {
+    group = 'case onboarding'
+    description = 'Runs full record-first onboarding. Required -Parea -Pfeature; accepts -Pscenario -Ppath -PtaskSuffix -Pfixture/-Precording -Pmode=fixture|interactive -PdryRun -Pforce and -Dbase.url.'
+
+    doLast {
+        if (Boolean.parseBoolean(optionalProjectProperty('help', 'false'))) {
+            exec {
+                workingDir rootProject.projectDir
+                commandLine(
+                        nodeExecutable,
+                        caseRecorderDir.toPath().resolve('src/onboard.mjs').toFile().absolutePath,
+                        '--help'
+                )
+            }
+            return
+        }
+
+        String areaName = requireProjectProperty('area')
+        String featureName = requireProjectProperty('feature')
+        Map<String, ?> knownAreaConfig = cucumberAreas[areaName]
+        String path = optionalProjectProperty('path', knownAreaConfig?.explore?.path ?: '/')
+        String baseUrl = System.getProperty('base.url') ?:
+                optionalProjectProperty('baseUrl', knownAreaConfig?.baseUrl ?: 'https://playwright.dev')
+        String testIdAttribute = optionalProjectProperty(
+                'testIdAttribute',
+                knownAreaConfig?.explore?.testIdAttribute ?: 'data-testid'
+        )
+        File draftDir = layout.buildDirectory.dir("case-drafts/${areaName}/${featureName}").get().asFile
+        List<String> toolArgs = [
+                caseRecorderDir.toPath().resolve('src/onboard.mjs').toFile().absolutePath,
+                '--repo-root', rootProject.projectDir.absolutePath,
+                '--area', areaName,
+                '--feature', featureName,
+                '--path', path,
+                '--base-url', baseUrl,
+                '--draft-dir', draftDir.absolutePath,
+                '--playwright-version', nodePlaywrightVersion,
+                '--test-id-attribute', testIdAttribute
+        ]
+
+        String scenarioName = optionalProjectProperty('scenario')
+        if (scenarioName != null) {
+            toolArgs += ['--scenario', scenarioName]
+        }
+
+        String taskSuffix = optionalProjectProperty('taskSuffix')
+        if (taskSuffix != null) {
+            toolArgs += ['--task-suffix', taskSuffix]
+        }
+
+        String fixturePath = optionalProjectProperty('fixture', optionalProjectProperty('recording'))
+        if (fixturePath != null) {
+            toolArgs += ['--fixture', rootProject.file(fixturePath).absolutePath]
+        }
+
+        String mode = optionalProjectProperty('mode')
+        if (mode != null) {
+            toolArgs += ['--mode', mode]
+        }
+
+        if (Boolean.parseBoolean(optionalProjectProperty('force', 'false'))) {
+            toolArgs += '--force'
+        }
+        if (Boolean.parseBoolean(optionalProjectProperty('dryRun', 'false'))) {
+            toolArgs += '--dry-run'
         }
 
         exec {
@@ -570,7 +672,7 @@ def generateCaseFromRecordingAction = {
 
 tasks.register('generateCaseFromRecording') {
     group = 'case onboarding'
-    description = 'Generates feature and step-definition drafts from a recorded case.'
+    description = 'Legacy generator: creates feature and step drafts from test-suite/build/case-drafts. Requires -Parea -Pfeature; accepts -Pscenario -PdryRun -Pforce and -Dbase.url.'
     dependsOn tasks.named('caseRecorderCheck')
 
     doLast(generateCaseFromRecordingAction)
@@ -578,7 +680,7 @@ tasks.register('generateCaseFromRecording') {
 
 tasks.register('generateCase') {
     group = 'case onboarding'
-    description = 'Alias for generateCaseFromRecording.'
+    description = 'Legacy alias for generateCaseFromRecording with the same -Parea/-Pfeature inputs.'
     dependsOn tasks.named('caseRecorderCheck')
 
     doLast(generateCaseFromRecordingAction)

@@ -3,13 +3,22 @@ export function parseArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === "-h") {
+      values.help = true;
+      continue;
+    }
     if (!token.startsWith("--")) {
       throw new Error(`Unexpected argument: ${token}`);
     }
 
-    const key = token.slice(2);
+    const [rawKey, inlineValue] = token.slice(2).split(/=(.*)/s, 2);
+    const key = rawKey;
     if (key.length === 0) {
       throw new Error("Empty option name is not supported");
+    }
+    if (inlineValue != null) {
+      values[key] = inlineValue;
+      continue;
     }
 
     const next = argv[index + 1];

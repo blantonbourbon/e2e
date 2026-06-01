@@ -7,7 +7,9 @@
     "doctor:shell": "sh bin/doctor.sh",
     "test": "node --test test/*.test.mjs",
     "record": "node src/record.mjs",
-    "generate": "node src/generate.mjs"
+    "generate": "node src/generate.mjs",
+    "onboard": "node src/onboard.mjs",
+    "onboard:smoke": "node src/onboard-smoke.mjs"
   },
   "engines": {
     "node": ">=20"
